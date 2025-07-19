@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/db'
 import { startOfDay, endOfDay, subDays, format } from 'date-fns'
 
 export async function GET(request: Request) {
