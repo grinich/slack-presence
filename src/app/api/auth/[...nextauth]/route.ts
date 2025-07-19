@@ -1,5 +1,4 @@
 import NextAuth from 'next-auth'
-import { NextRequest } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -45,9 +44,9 @@ const handler = NextAuth({
       token: 'https://slack.com/api/oauth.v2.access',
       userinfo: {
         url: 'https://slack.com/api/auth.test',
-        async request({ tokens }: { tokens: any }) {
+        async request({ tokens }: { tokens: Record<string, unknown> }) {
           // Use the user token (authed_user.access_token) instead of bot token
-          const userToken = tokens.authed_user?.access_token || tokens.access_token
+          const userToken = (tokens.authed_user as Record<string, unknown>)?.access_token || tokens.access_token
           
           // First, get the user info to get the team
           const authResponse = await fetch('https://slack.com/api/auth.test', {
@@ -93,7 +92,7 @@ const handler = NextAuth({
       },
       clientId: process.env.SLACK_CLIENT_ID,
       clientSecret: process.env.SLACK_CLIENT_SECRET,
-      profile(profile, tokens) {
+      profile(profile) {
         return {
           id: profile.user.id,
           name: profile.user.real_name || profile.user.name,
@@ -110,7 +109,7 @@ const handler = NextAuth({
     }
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === 'slack') {
         try {
           // Check if user exists, if not create them
