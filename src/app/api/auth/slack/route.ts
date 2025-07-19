@@ -2,31 +2,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { InstallProvider } from '@slack/oauth'
 import { WebClient } from '@slack/web-api'
 
-const installer = new InstallProvider({
-  clientId: process.env.SLACK_CLIENT_ID!,
-  clientSecret: process.env.SLACK_CLIENT_SECRET!,
-  stateSecret: process.env.SLACK_SIGNING_SECRET!,
-  installationStore: {
-    storeInstallation: async (installation) => {
-      // Store installation in database
-      console.log('Store installation:', installation)
-      return Promise.resolve()
+function createInstaller() {
+  return new InstallProvider({
+    clientId: process.env.SLACK_CLIENT_ID!,
+    clientSecret: process.env.SLACK_CLIENT_SECRET!,
+    stateSecret: process.env.SLACK_CLIENT_SECRET!,
+    installationStore: {
+      storeInstallation: async (installation) => {
+        // Store installation in database
+        console.log('Store installation:', installation)
+        return Promise.resolve()
+      },
+      fetchInstallation: async (installQuery) => {
+        // Fetch installation from database
+        console.log('Fetch installation:', installQuery)
+        // For now, throw error to indicate no installation found
+        throw new Error('Installation not found')
+      },
+      deleteInstallation: async (installQuery) => {
+        // Delete installation from database
+        console.log('Delete installation:', installQuery)
+        return Promise.resolve()
+      },
     },
-    fetchInstallation: async (installQuery) => {
-      // Fetch installation from database
-      console.log('Fetch installation:', installQuery)
-      // For now, throw error to indicate no installation found
-      throw new Error('Installation not found')
-    },
-    deleteInstallation: async (installQuery) => {
-      // Delete installation from database
-      console.log('Delete installation:', installQuery)
-      return Promise.resolve()
-    },
-  },
-})
+  })
+}
 
 export async function GET() {
+  const installer = createInstaller()
   const url = await installer.generateInstallUrl({
     scopes: ['users:read', 'users:read.email', 'channels:read', 'groups:read', 'im:read', 'mpim:read'],
     userScopes: [],
