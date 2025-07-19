@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { InstallProvider } from '@slack/oauth'
+import { WebClient } from '@slack/web-api'
 
 const installer = new InstallProvider({
   clientId: process.env.SLACK_CLIENT_ID!,
@@ -35,19 +36,28 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.text()
-  const urlParams = new URLSearchParams(body)
-  const code = urlParams.get('code')
-  const state = urlParams.get('state')
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  const state = url.searchParams.get('state')
   
   if (!code) {
     return NextResponse.json({ error: 'Missing code' }, { status: 400 })
   }
   
   try {
-    const installation = await installer.handleCallback(request, NextResponse)
+    // Exchange code for tokens using Web API
+    const client = new WebClient()
+    const result = await client.oauth.v2.access({
+      client_id: process.env.SLACK_CLIENT_ID!,
+      client_secret: process.env.SLACK_CLIENT_SECRET!,
+      code: code,
+    })
     
-    return NextResponse.json({ success: true, installation })
+    if (!result.ok) {
+      throw new Error('OAuth access failed')
+    }
+    
+    return NextResponse.json({ success: true, result })
   } catch (error) {
     console.error('OAuth callback error:', error)
     return NextResponse.json({ error: 'OAuth failed' }, { status: 500 })
