@@ -44,9 +44,9 @@ const handler = NextAuth({
       token: 'https://slack.com/api/oauth.v2.access',
       userinfo: {
         url: 'https://slack.com/api/auth.test',
-        async request({ tokens }: { tokens: Record<string, unknown> }) {
+        async request({ tokens }: { tokens: { authed_user?: { access_token?: string }; access_token?: string } }) {
           // Use the user token (authed_user.access_token) instead of bot token
-          const userToken = (tokens.authed_user as Record<string, unknown>)?.access_token || tokens.access_token
+          const userToken = tokens.authed_user?.access_token || tokens.access_token
           
           // First, get the user info to get the team
           const authResponse = await fetch('https://slack.com/api/auth.test', {
