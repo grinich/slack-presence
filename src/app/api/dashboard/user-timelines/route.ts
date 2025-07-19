@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { subDays, format, startOfDay, endOfDay } from 'date-fns'
 
+interface PresenceLog {
+  id: string
+  userId: string
+  status: string
+  timestamp: Date
+  metadata?: string | null
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const userIds = searchParams.get('userIds')?.split(',').filter(id => id.trim()) || []
@@ -69,7 +77,7 @@ export async function GET(request: NextRequest) {
         const dayEnd = endOfDay(workday)
         
         // Filter logs for this specific workday
-        const presenceLogs = userPresenceLogs.filter(log => 
+        const presenceLogs = userPresenceLogs.filter((log: PresenceLog) => 
           log.timestamp >= dayStart && log.timestamp <= dayEnd
         )
         
