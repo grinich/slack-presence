@@ -2,11 +2,17 @@
   "crons": [
     {
       "path": "/api/cron/collect-presence",
-      "schedule": "* * * * *"
+      "schedule": "* * * * *",
+      "headers": {
+        "authorization": "Bearer $CRON_SECRET"
+      }
     },
     {
       "path": "/api/cron/sync-all-users",
-      "schedule": "0 * * * *"
+      "schedule": "0 * * * *",
+      "headers": {
+        "authorization": "Bearer $CRON_SECRET"
+      }
     }
   ]
 }
