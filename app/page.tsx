@@ -1,5 +1,5 @@
 import { Metadata } from 'next'
-import AuthenticatedDashboard from '@/components/AuthenticatedDashboard'
+import AuthenticatedDashboard from '../src/components/AuthenticatedDashboard'
 
 export const metadata: Metadata = {
   title: 'Online',

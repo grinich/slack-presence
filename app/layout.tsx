@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from './providers';
-import StartupInit from '@/components/StartupInit';
+import StartupInit from '../src/components/StartupInit';
 
 export const metadata: Metadata = {
   title: "Online",
   description: "See who's online and active right now",
   icons: {
-    icon: '/favicon.svg',
+    icon: '/favicon.ico',
   },
 };
 

@@ -77,7 +77,7 @@ interface DashboardData {
 export default function AuthenticatedDashboard() {
   const { status } = useSession()
   const router = useRouter()
-  const [data, setData] = useState<DashboardData | null>(null)
+  const [data, setData] = useState<UserStats[] | null>(null)
   const [timelineData, setTimelineData] = useState<Map<string, WorkdayData[]> | null>(null)
   const [todayData, setTodayData] = useState<UserTodayData[] | null>(null)
   const [loading, setLoading] = useState(true)
@@ -105,22 +105,33 @@ export default function AuthenticatedDashboard() {
         console.log('Fetching dashboard data...')
         setLastRefresh(now)
         
-        // Fetch dashboard stats and today's overview in parallel
-        const [statsResponse, todayResponse] = await Promise.all([
-          fetch('/api/dashboard/stats'),
+        // Fetch today's overview (contains both stats and overview data)
+        const [todayResponse] = await Promise.all([
           fetch('/api/dashboard/today-overview')
         ])
         
-        const [statsResult, todayResult] = await Promise.all([
-          statsResponse.json(),
+        const [todayResult] = await Promise.all([
           todayResponse.json()
         ])
         
-        if (statsResult.success) {
-          setData(statsResult.data)
+        if (todayResult.success) {
+          // Transform UserTodayData to UserStats format
+          const transformedData: UserStats[] = todayResult.data.map((user: any) => ({
+            id: user.id,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            timezone: user.timezone,
+            totalActiveMinutes: user.totalActiveMinutes,
+            todayActiveMinutes: user.totalActiveMinutes,
+            lastSeen: null, // Not available in current API
+            isOnline: user.totalActiveMinutes > 0 // Simple heuristic - user is "online" if they had activity today
+          }))
+          
+          setData(transformedData)
+          setTodayData(todayResult.data)
           
           // Extract user IDs and fetch timeline data in batch
-          const userIds = statsResult.data.userStats.map((user: UserStats) => user.id)
+          const userIds = todayResult.data.map((user: any) => user.id)
           
           if (userIds.length > 0) {
             const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}`)
@@ -136,11 +147,7 @@ export default function AuthenticatedDashboard() {
             }
           }
         } else {
-          setError(statsResult.error || 'Failed to fetch data')
-        }
-        
-        if (todayResult.success) {
-          setTodayData(todayResult.data)
+          setError(todayResult.error || 'Failed to fetch data')
         }
       } catch {
         setError('Network error')
@@ -315,12 +322,12 @@ export default function AuthenticatedDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center space-x-2 text-sm">
                   <Users className="h-4 w-4" />
-                  <span>Currently Online ({data.userStats.filter(user => user.isOnline).length})</span>
+                  <span>Currently Online ({data.filter(user => user.isOnline).length})</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex flex-wrap gap-2">
-                  {data.userStats.filter(user => user.isOnline).map((user) => (
+                  {data.filter(user => user.isOnline).map((user) => (
                     <div key={user.id} className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1">
                       <div className="relative">
                         {user.avatarUrl ? (
@@ -343,7 +350,7 @@ export default function AuthenticatedDashboard() {
                       </span>
                     </div>
                   ))}
-                  {data.userStats.filter(user => user.isOnline).length === 0 && (
+                  {data.filter(user => user.isOnline).length === 0 && (
                     <span className="text-sm text-gray-500 dark:text-gray-400">No team members currently online</span>
                   )}
                 </div>
@@ -358,9 +365,9 @@ export default function AuthenticatedDashboard() {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{data.teamStats.totalUsers}</div>
+                  <div className="text-2xl font-bold">{data.length}</div>
                   <p className="text-xs text-muted-foreground">
-                    {data.teamStats.onlineUsers} online now
+                    {data.filter(user => user.isOnline).length} online now
                   </p>
                 </CardContent>
               </Card>
@@ -371,9 +378,9 @@ export default function AuthenticatedDashboard() {
                   <Activity className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{data.teamStats.onlineUsers}</div>
+                  <div className="text-2xl font-bold">{data.filter(user => user.isOnline).length}</div>
                   <p className="text-xs text-muted-foreground">
-                    {Math.round((data.teamStats.onlineUsers / data.teamStats.totalUsers) * 100)}% of team
+                    {Math.round((data.filter(user => user.isOnline).length / data.length) * 100)}% of team
                   </p>
                 </CardContent>
               </Card>
@@ -385,7 +392,7 @@ export default function AuthenticatedDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {formatMinutes(data.teamStats.totalTeamActiveMinutes)}
+                    {formatMinutes(data.reduce((sum, user) => sum + user.totalActiveMinutes, 0))}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Last 7 days
@@ -400,7 +407,7 @@ export default function AuthenticatedDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {formatMinutes(Math.round(data.teamStats.avgActiveMinutesPerUser))}
+                    {formatMinutes(Math.round(data.reduce((sum, user) => sum + user.totalActiveMinutes, 0) / data.length))}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Weekly average
@@ -438,7 +445,7 @@ export default function AuthenticatedDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
-                  {data.userStats.map((user) => (
+                  {data.map((user) => (
                     <div key={user.id} className="p-4 border rounded-lg space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
