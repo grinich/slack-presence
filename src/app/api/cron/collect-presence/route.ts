@@ -5,10 +5,10 @@ const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify the request is from Vercel Cron
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Verify the request is from Vercel Cron by checking for Vercel-specific headers
+    const cronHeader = request.headers.get('x-vercel-cron')
+    if (!cronHeader) {
+      return NextResponse.json({ error: 'Unauthorized - not from Vercel cron' }, { status: 401 })
     }
 
     console.log('Starting presence collection job...')
