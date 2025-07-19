@@ -20,12 +20,6 @@ interface UserStats {
   isOnline: boolean
 }
 
-interface TeamStats {
-  totalUsers: number
-  onlineUsers: number
-  totalTeamActiveMinutes: number
-  avgActiveMinutesPerUser: number
-}
 
 interface WorkdayData {
   date: string
