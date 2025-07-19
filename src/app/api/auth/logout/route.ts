@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { cookies } from 'next/headers'
 
 export async function POST(request: NextRequest) {
   try {
     // Clear all NextAuth cookies
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     
     // Get all cookies that might be NextAuth related
     const allCookies = cookieStore.getAll()
