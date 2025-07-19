@@ -12,7 +12,7 @@ Create a `.env.local` file in the root directory:
 
 ```bash
 # Database (SQLite for local development)
-DATABASE_URL="file:./dev.db"
+POSTGRES_URL="file:./dev.db"
 
 # NextAuth.js
 NEXTAUTH_URL="http://localhost:3000"
@@ -87,7 +87,7 @@ openssl rand -base64 32
 
 Later, you can easily switch to a cloud database by:
 1. Creating a PostgreSQL database (Supabase, Neon, etc.)
-2. Updating `DATABASE_URL` in your environment
+2. Updating `POSTGRES_URL` in your environment
 3. Running `npx prisma migrate deploy`
 4. Deploying to Vercel with the same environment variables
 

@@ -35,7 +35,7 @@ A modern web application for monitoring your team's Slack activity and presence 
    Copy `.env.example` to `.env` and fill in your values:
    ```bash
    # Database
-   DATABASE_URL="your-postgres-connection-string"
+   POSTGRES_URL="your-postgres-connection-string"
    
    # Slack OAuth (get from https://api.slack.com/apps)
    SLACK_CLIENT_ID="your-client-id"
