@@ -102,6 +102,14 @@ export default function AuthenticatedDashboard() {
         userTodayEnd.setDate(userTodayEnd.getDate() + 1)
         userTodayEnd.setMilliseconds(-1) // End of day
         
+        console.log('Client timezone info:', {
+          userNow: userNow.toISOString(),
+          localDate: `${userNow.getFullYear()}-${userNow.getMonth() + 1}-${userNow.getDate()}`,
+          userTodayStart: userTodayStart.toISOString(),
+          userTodayEnd: userTodayEnd.toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        })
+        
         // Fetch today's overview with timezone-aware date range
         const [todayResponse] = await Promise.all([
           fetch(`/api/dashboard/today-overview?start=${userTodayStart.toISOString()}&end=${userTodayEnd.toISOString()}`)

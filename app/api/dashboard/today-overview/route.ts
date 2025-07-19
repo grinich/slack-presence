@@ -17,11 +17,21 @@ export async function GET(request: Request) {
       // Use client-provided UTC date range
       todayStart = new Date(startParam)
       todayEnd = new Date(endParam)
+      console.log('Today overview using client dates:', {
+        startParam,
+        endParam,
+        todayStart: todayStart.toISOString(),
+        todayEnd: todayEnd.toISOString()
+      })
     } else {
       // Fallback to UTC today
       const now = new Date()
       todayStart = startOfDay(now)
       todayEnd = endOfDay(now)
+      console.log('Today overview using server UTC dates:', {
+        todayStart: todayStart.toISOString(),
+        todayEnd: todayEnd.toISOString()
+      })
     }
     
     // Get all active users with their presence data for today (optimized)
@@ -64,10 +74,10 @@ export async function GET(request: Request) {
       for (let hour = 0; hour < 24; hour++) {
         for (let quarter = 0; quarter < 4; quarter++) {
           const blockStart = new Date(todayStart)
-          blockStart.setHours(hour, quarter * 15, 0, 0)
+          blockStart.setUTCHours(hour, quarter * 15, 0, 0)
           
           const blockEnd = new Date(blockStart)
-          blockEnd.setMinutes(blockEnd.getMinutes() + 15)
+          blockEnd.setUTCMinutes(blockEnd.getUTCMinutes() + 15)
           
           // Find presence logs within this 15-minute block
           const blockLogs = user.presenceLogs.filter(log => 
