@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 
+interface SlackMember {
+  id: string
+  deleted?: boolean
+  is_restricted?: boolean
+  is_ultra_restricted?: boolean
+  is_bot?: boolean
+  real_name?: string
+  name?: string
+  profile?: {
+    email?: string
+    image_192?: string
+    display_name?: string
+    status_text?: string
+    status_emoji?: string
+    title?: string
+  }
+  tz?: string
+  is_admin?: boolean
+  is_owner?: boolean
+}
+
+interface SlackUsersResponse {
+  ok: boolean
+  members: SlackMember[]
+  error?: string
+}
+
 const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
@@ -48,7 +75,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const usersData = await usersResponse.json()
+    const usersData: SlackUsersResponse = await usersResponse.json()
 
     if (!usersData.ok) {
       console.error('Failed to fetch team members:', usersData.error)
@@ -129,8 +156,8 @@ export async function POST(request: NextRequest) {
 
     // Clean up users who are no longer in the Slack workspace
     const activeSlackUserIds = usersData.members
-      .filter((member: any) => !member.deleted && !member.is_restricted && !member.is_ultra_restricted && !member.is_bot)
-      .map((member: any) => member.id)
+      .filter((member: SlackMember) => !member.deleted && !member.is_restricted && !member.is_ultra_restricted && !member.is_bot)
+      .map((member: SlackMember) => member.id)
     
     const inactiveUsers = await prisma.user.findMany({
       where: {
