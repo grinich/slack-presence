@@ -1,7 +1,5 @@
 import { WebClient } from '@slack/web-api'
 
-export const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN)
-
 export interface SlackUser {
   id: string
   name: string
@@ -22,9 +20,10 @@ export interface SlackPresence {
   last_activity: number
 }
 
-export async function getTeamUsers(): Promise<SlackUser[]> {
+export async function getTeamUsers(userAccessToken: string): Promise<SlackUser[]> {
   try {
-    const result = await slackClient.users.list({
+    const client = new WebClient(userAccessToken)
+    const result = await client.users.list({
       exclude_archived: true,
       exclude_bot_users: true,
     })
@@ -36,10 +35,9 @@ export async function getTeamUsers(): Promise<SlackUser[]> {
   }
 }
 
-export async function getUserPresence(userId: string, userAccessToken?: string): Promise<SlackPresence | null> {
+export async function getUserPresence(userId: string, userAccessToken: string): Promise<SlackPresence | null> {
   try {
-    // Use user's access token if provided, otherwise use bot token
-    const client = userAccessToken ? new WebClient(userAccessToken) : slackClient
+    const client = new WebClient(userAccessToken)
     
     const result = await client.users.getPresence({
       user: userId,

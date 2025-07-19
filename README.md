@@ -41,7 +41,6 @@ A modern web application for monitoring your team's Slack activity and presence 
    SLACK_CLIENT_ID="your-client-id"
    SLACK_CLIENT_SECRET="your-client-secret"
    SLACK_SIGNING_SECRET="your-signing-secret"
-   SLACK_BOT_TOKEN="your-bot-token"
    
    # NextAuth
    NEXTAUTH_SECRET="your-secret-key"

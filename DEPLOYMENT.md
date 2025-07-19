@@ -70,7 +70,6 @@ NEXTAUTH_URL = https://your-app.vercel.app
 NEXTAUTH_SECRET = [generate with: openssl rand -base64 32]
 SLACK_CLIENT_ID = [from your Slack app]
 SLACK_CLIENT_SECRET = [from your Slack app] 
-SLACK_BOT_TOKEN = xoxb-[from your Slack app]
 CRON_SECRET = [generate with: openssl rand -base64 32]
 ```
 
