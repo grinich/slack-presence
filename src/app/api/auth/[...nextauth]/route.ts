@@ -92,16 +92,16 @@ const handler = NextAuth({
       clientSecret: process.env.SLACK_CLIENT_SECRET,
       profile(profile) {
         return {
-          id: profile.user.id,
-          name: profile.user.real_name || profile.user.name,
-          email: profile.user.profile?.email || '',
-          image: profile.user.profile?.image_192 || '',
-          slackUserId: profile.user.id,
+          id: profile.id,
+          name: profile.name,
+          email: profile.email || '',
+          image: profile.image || '',
+          slackUserId: profile.user_id,
           slackTeamId: profile.team_id,
-          slackAccessToken: profile.user_token, // Use user token instead of bot token
-          slackBotToken: profile.bot_token, // Store bot token separately
+          slackAccessToken: profile.user_token,
+          slackBotToken: profile.bot_token,
           slackTeamName: profile.team,
-          timezone: profile.user.tz
+          timezone: profile.timezone
         }
       }
     }
@@ -110,12 +110,16 @@ const handler = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === 'slack') {
         try {
+          console.log('SignIn callback - User data:', JSON.stringify(user, null, 2))
+          console.log('SignIn callback - Account data:', JSON.stringify(account, null, 2))
+          
           // Check if user exists, if not create them
           const existingUser = await prisma.user.findUnique({
             where: { slackUserId: user.slackUserId }
           })
 
           if (!existingUser) {
+            console.log('Creating new user for Slack ID:', user.slackUserId)
             await prisma.user.create({
               data: {
                 slackUserId: user.slackUserId,
@@ -132,7 +136,9 @@ const handler = NextAuth({
                 })
               }
             })
+            console.log('User created successfully')
           } else {
+            console.log('Updating existing user for Slack ID:', user.slackUserId)
             // Update existing user with fresh token
             await prisma.user.update({
               where: { slackUserId: user.slackUserId },
@@ -149,6 +155,7 @@ const handler = NextAuth({
                 })
               }
             })
+            console.log('User updated successfully')
           }
           return true
         } catch (error) {
