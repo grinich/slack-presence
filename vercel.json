@@ -1,12 +1,26 @@
 {
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/collect-presence",
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/cron/sync-all-users",
+      "path": "/api/cron/sync-all-users", 
       "schedule": "0 * * * *"
     }
-  ]
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "NEXTAUTH_SECRET": "@nextauth_secret",
+    "SLACK_CLIENT_ID": "@slack_client_id", 
+    "SLACK_CLIENT_SECRET": "@slack_client_secret",
+    "SLACK_BOT_TOKEN": "@slack_bot_token",
+    "CRON_SECRET": "@cron_secret"
+  }
 }
