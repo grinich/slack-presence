@@ -79,7 +79,10 @@ const handler = NextAuth({
           }
           
           return {
-            user: userData.user,
+            id: authData.user_id,
+            name: userData.user.real_name,
+            email: userData.user.profile?.email,
+            image: userData.user.profile?.image_192,
             team: authData.team,
             team_id: authData.team_id,
             user_id: authData.user_id,
