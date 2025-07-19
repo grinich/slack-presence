@@ -45,7 +45,7 @@ const handler = NextAuth({
       token: 'https://slack.com/api/oauth.v2.access',
       userinfo: {
         url: 'https://slack.com/api/auth.test',
-        async request({ tokens }) {
+        async request({ tokens }: { tokens: any }) {
           // Use the user token (authed_user.access_token) instead of bot token
           const userToken = tokens.authed_user?.access_token || tokens.access_token
           
