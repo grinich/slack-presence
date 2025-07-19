@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id               String   @id @default(cuid())
+  slackUserId      String   @unique @map("slack_user_id")
+  name             String?
+  email            String?
+  avatarUrl        String?  @map("avatar_url")
+  slackAccessToken String?  @map("slack_access_token")
+  slackTeamId      String?  @map("slack_team_id")
+  timezone         String?
+  metadata         String?  // JSON field for additional data
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  presenceLogs   PresenceLog[]
+  dailySummaries DailySummary[]
+  
+  @@index([slackTeamId])      // For team-based queries
+  @@index([metadata])         // For filtering inactive users
+  @@index([slackAccessToken]) // For finding authenticated users
+  @@map("users")
+}
+
+model PresenceLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  status    String   // "active", "away", "offline"
+  timestamp DateTime
+  metadata  String?  // JSON field for additional data
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, timestamp])
+  @@index([timestamp])        // For date range queries across all users
+  @@index([status])           // For filtering by status (active/away)
+  @@index([userId, status])   // For user-specific status queries
+  @@map("presence_logs")
+}
+
+
+model DailySummary {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  date              DateTime
+  totalActiveMinutes Int      @map("total_active_minutes")
+  firstActiveTime   DateTime? @map("first_active_time")
+  lastActiveTime    DateTime? @map("last_active_time")
+  peakActivityHour  Int?      @map("peak_activity_hour")
+  metadata          String?   // JSON field for additional data
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+  @@map("daily_summaries")
+}

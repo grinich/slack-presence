@@ -1,0 +1,56 @@
+{
+  "display_information": {
+    "name": "Team Analytics",
+    "description": "Monitor your team's Slack activity and presence patterns with detailed analytics and visualizations.",
+    "background_color": "#4A154B",
+    "long_description": "Team Analytics provides comprehensive insights into your Slack workspace activity. Track team member presence patterns, message activity, and collaboration trends with beautiful visualizations and detailed analytics. Perfect for understanding team productivity patterns and optimizing collaboration workflows."
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Team Analytics",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://your-domain.vercel.app/api/auth/callback/slack",
+      "http://localhost:3000/api/auth/callback/slack"
+    ],
+    "scopes": {
+      "user": [],
+      "bot": [
+        "channels:read",
+        "channels:history",
+        "groups:read",
+        "groups:history",
+        "im:read",
+        "im:history",
+        "mpim:read",
+        "mpim:history",
+        "users:read",
+        "users:read.email",
+        "users.profile:read",
+        "team:read"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://your-domain.vercel.app/api/webhooks/slack",
+      "bot_events": [
+        "message.channels",
+        "message.groups",
+        "message.im",
+        "message.mpim",
+        "user_change",
+        "team_join"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": false
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

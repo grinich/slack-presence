@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/collect-presence",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/sync-all-users",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
