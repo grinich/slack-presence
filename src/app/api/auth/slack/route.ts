@@ -26,7 +26,7 @@ const installer = new InstallProvider({
   },
 })
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const url = await installer.generateInstallUrl({
     scopes: ['users:read', 'users:read.email', 'channels:read', 'groups:read', 'im:read', 'mpim:read'],
     userScopes: [],
@@ -38,7 +38,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
-  const state = url.searchParams.get('state')
   
   if (!code) {
     return NextResponse.json({ error: 'Missing code' }, { status: 400 })
