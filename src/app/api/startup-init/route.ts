@@ -70,9 +70,10 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Startup initialization error:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json({ 
       error: 'Startup initialization failed',
-      details: error.message 
+      details: errorMessage 
     }, { status: 500 })
   }
 }
