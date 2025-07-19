@@ -129,8 +129,8 @@ export async function POST(request: NextRequest) {
 
     // Clean up users who are no longer in the Slack workspace
     const activeSlackUserIds = usersData.members
-      .filter(member => !member.deleted && !member.is_restricted && !member.is_ultra_restricted && !member.is_bot)
-      .map(member => member.id)
+      .filter((member: any) => !member.deleted && !member.is_restricted && !member.is_ultra_restricted && !member.is_bot)
+      .map((member: any) => member.id)
     
     const inactiveUsers = await prisma.user.findMany({
       where: {
