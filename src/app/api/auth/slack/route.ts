@@ -5,7 +5,6 @@ const installer = new InstallProvider({
   clientId: process.env.SLACK_CLIENT_ID!,
   clientSecret: process.env.SLACK_CLIENT_SECRET!,
   stateSecret: process.env.SLACK_SIGNING_SECRET!,
-  scopes: ['users:read', 'users:read.email', 'channels:read', 'groups:read', 'im:read', 'mpim:read'],
   installationStore: {
     storeInstallation: async (installation) => {
       // Store installation in database
