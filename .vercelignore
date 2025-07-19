@@ -1,0 +1,10 @@
+# Vercel ignore file
+.env.local
+.env
+.mcp.json
+node_modules
+.next
+.git
+*.log
+*.db
+.DS_Store
