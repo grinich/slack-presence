@@ -15,7 +15,8 @@ const installer = new InstallProvider({
     fetchInstallation: async (installQuery) => {
       // Fetch installation from database
       console.log('Fetch installation:', installQuery)
-      return Promise.resolve(undefined)
+      // For now, throw error to indicate no installation found
+      throw new Error('Installation not found')
     },
     deleteInstallation: async (installQuery) => {
       // Delete installation from database
