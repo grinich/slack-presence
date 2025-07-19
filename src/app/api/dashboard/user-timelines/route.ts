@@ -97,14 +97,14 @@ export async function GET(request: NextRequest) {
             blockEnd.setHours(hour, quarter * 15 + 14, 59, 999)
             
             // Find logs within this 15-minute block
-            const blockLogs = presenceLogs.filter(log => 
+            const blockLogs = presenceLogs.filter((log: PresenceLog) => 
               log.timestamp >= blockStart && log.timestamp <= blockEnd
             )
             
             const blockMessages = [] // Messages removed - using presence data only
             
             // Calculate online percentage for this 15-minute block
-            const activeMinutes = blockLogs.filter(log => log.status === 'active').length
+            const activeMinutes = blockLogs.filter((log: PresenceLog) => log.status === 'active').length
             const totalMinutesInBlock = 15 // Each block is 15 minutes
             const totalMinutesWithData = blockLogs.length
             const presencePercentage = totalMinutesWithData > 0 ? (activeMinutes / totalMinutesWithData) * 100 : 0
