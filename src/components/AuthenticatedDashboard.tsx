@@ -175,7 +175,7 @@ export default function AuthenticatedDashboard() {
         clearInterval(refreshInterval)
       }
     }
-  }, [status])
+  }, [status, lastRefresh, router])
 
 
 
