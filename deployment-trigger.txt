@@ -1,0 +1,1 @@
+DATABASE_URL environment variable removed from Vercel project
