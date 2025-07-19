@@ -19,12 +19,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const today = new Date()
+    // Get date range from query parameters for timezone handling
+    const startParam = searchParams.get('start')
+    
+    let baseDate: Date
+    if (startParam) {
+      baseDate = new Date(startParam)
+    } else {
+      baseDate = new Date() // Fallback to UTC today
+    }
     
     const workdays = []
     
     // Get the last 7 days including today and weekends
-    const userTimezoneToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const userTimezoneToday = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
     
     // Generate last 7 days (including today)
     for (let i = 0; i < 7; i++) {

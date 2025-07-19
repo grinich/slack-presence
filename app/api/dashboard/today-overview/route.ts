@@ -2,11 +2,27 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { startOfDay, endOfDay } from 'date-fns'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const now = new Date()
-    const todayStart = startOfDay(now)
-    const todayEnd = endOfDay(now)
+    const { searchParams } = new URL(request.url)
+    
+    // Get date range from query parameters, or default to UTC today
+    const startParam = searchParams.get('start')
+    const endParam = searchParams.get('end')
+    
+    let todayStart: Date
+    let todayEnd: Date
+    
+    if (startParam && endParam) {
+      // Use client-provided UTC date range
+      todayStart = new Date(startParam)
+      todayEnd = new Date(endParam)
+    } else {
+      // Fallback to UTC today
+      const now = new Date()
+      todayStart = startOfDay(now)
+      todayEnd = endOfDay(now)
+    }
     
     // Get all active users with their presence data for today (optimized)
     const users = await prisma.user.findMany({

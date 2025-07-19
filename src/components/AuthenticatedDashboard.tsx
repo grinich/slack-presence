@@ -95,9 +95,16 @@ export default function AuthenticatedDashboard() {
         console.log('Fetching dashboard data...')
         setLastRefresh(now)
         
-        // Fetch today's overview (contains both stats and overview data)
+        // Calculate today in user's local timezone and convert to UTC for server
+        const userNow = new Date()
+        const userTodayStart = new Date(userNow.getFullYear(), userNow.getMonth(), userNow.getDate())
+        const userTodayEnd = new Date(userTodayStart)
+        userTodayEnd.setDate(userTodayEnd.getDate() + 1)
+        userTodayEnd.setMilliseconds(-1) // End of day
+        
+        // Fetch today's overview with timezone-aware date range
         const [todayResponse] = await Promise.all([
-          fetch('/api/dashboard/today-overview')
+          fetch(`/api/dashboard/today-overview?start=${userTodayStart.toISOString()}&end=${userTodayEnd.toISOString()}`)
         ])
         
         const [todayResult] = await Promise.all([
@@ -124,7 +131,7 @@ export default function AuthenticatedDashboard() {
           const userIds = todayResult.data.map((user: UserTodayData) => user.id)
           
           if (userIds.length > 0) {
-            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}`)
+            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userTodayStart.toISOString()}`)
             const timelineResult = await timelineResponse.json()
             
             if (timelineResult.success) {
