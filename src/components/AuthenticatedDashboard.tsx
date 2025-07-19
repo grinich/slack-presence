@@ -69,10 +69,6 @@ interface UserTodayData {
   messageCount: number
 }
 
-interface DashboardData {
-  teamStats: TeamStats
-  userStats: UserStats[]
-}
 
 export default function AuthenticatedDashboard() {
   const { status } = useSession()
@@ -116,7 +112,7 @@ export default function AuthenticatedDashboard() {
         
         if (todayResult.success) {
           // Transform UserTodayData to UserStats format
-          const transformedData: UserStats[] = todayResult.data.map((user: any) => ({
+          const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
             id: user.id,
             name: user.name,
             avatarUrl: user.avatarUrl,
@@ -131,7 +127,7 @@ export default function AuthenticatedDashboard() {
           setTodayData(todayResult.data)
           
           // Extract user IDs and fetch timeline data in batch
-          const userIds = todayResult.data.map((user: any) => user.id)
+          const userIds = todayResult.data.map((user: UserTodayData) => user.id)
           
           if (userIds.length > 0) {
             const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}`)
@@ -283,7 +279,7 @@ export default function AuthenticatedDashboard() {
       }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value || ''
       
       return `${userTime} ${zoneName}`
-    } catch (error) {
+    } catch {
       // If timezone is invalid, return null
       return null
     }
