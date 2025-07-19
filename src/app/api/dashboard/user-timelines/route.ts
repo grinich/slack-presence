@@ -112,12 +112,12 @@ export async function GET(request: NextRequest) {
             const hasMessages = false // Messages removed - using presence data only
             
             // Determine status based on presence activity only
-            let status = 'offline'
+            let status = 'no-data'
             let onlinePercentage = presencePercentage
             
-            if (presencePercentage > 0) {
+            if (totalMinutesWithData > 0) {
               // Use presence data
-              status = presencePercentage >= 50 ? 'online' : 'partial'
+              status = presencePercentage >= 50 ? 'online' : 'offline'
               onlinePercentage = presencePercentage
             }
             

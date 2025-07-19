@@ -23,10 +23,7 @@ export interface SlackPresence {
 export async function getTeamUsers(userAccessToken: string): Promise<SlackUser[]> {
   try {
     const client = new WebClient(userAccessToken)
-    const result = await client.users.list({
-      exclude_archived: true,
-      exclude_bot_users: true,
-    })
+    const result = await client.users.list({})
     
     return (result.members as SlackUser[]) || []
   } catch (error) {

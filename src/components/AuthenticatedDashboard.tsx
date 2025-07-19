@@ -27,6 +27,26 @@ interface TeamStats {
   avgActiveMinutesPerUser: number
 }
 
+interface WorkdayData {
+  date: string
+  dayName: string
+  dayShort: string
+  timeline: {
+    hour: number
+    quarter: number
+    blockIndex: number
+    status: 'online' | 'offline' | 'no-data'
+    onlinePercentage: number
+    activeMinutes: number
+    totalMinutes: number
+    messageCount: number
+    hasMessages: boolean
+    blockStart: string
+    blockEnd: string
+  }[]
+  messageCount: number
+}
+
 interface UserTodayData {
   id: string
   name: string
@@ -36,7 +56,7 @@ interface UserTodayData {
     hour: number
     quarter: number
     blockIndex: number
-    status: 'online' | 'partial' | 'offline'
+    status: 'online' | 'offline' | 'no-data'
     onlinePercentage: number
     activeMinutes: number
     totalMinutes: number
@@ -58,7 +78,7 @@ export default function AuthenticatedDashboard() {
   const { status } = useSession()
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
-  const [timelineData, setTimelineData] = useState<Map<string, unknown> | null>(null)
+  const [timelineData, setTimelineData] = useState<Map<string, WorkdayData[]> | null>(null)
   const [todayData, setTodayData] = useState<UserTodayData[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
