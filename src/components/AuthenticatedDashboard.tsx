@@ -35,8 +35,8 @@ interface WorkdayData {
     totalMinutes: number
     messageCount: number
     hasMessages: boolean
-    blockStart: string
-    blockEnd: string
+    blockStart: string // UTC ISO string
+    blockEnd: string // UTC ISO string
   }[]
   messageCount: number
 }
@@ -56,8 +56,8 @@ interface UserTodayData {
     totalMinutes: number
     messageCount: number
     hasMessages: boolean
-    blockStart: string
-    blockEnd: string
+    blockStart: string // UTC ISO string
+    blockEnd: string // UTC ISO string
   }[]
   totalActiveMinutes: number
   messageCount: number
@@ -92,7 +92,7 @@ export default function AuthenticatedDashboard() {
       }
       
       try {
-        console.log('Fetching dashboard data...')
+        // Fetching dashboard data
         setLastRefresh(now)
         
         // Calculate today in user's local timezone and convert to UTC for server
@@ -102,13 +102,7 @@ export default function AuthenticatedDashboard() {
         userTodayEnd.setDate(userTodayEnd.getDate() + 1)
         userTodayEnd.setMilliseconds(-1) // End of day
         
-        console.log('Client timezone info:', {
-          userNow: userNow.toISOString(),
-          localDate: `${userNow.getFullYear()}-${userNow.getMonth() + 1}-${userNow.getDate()}`,
-          userTodayStart: userTodayStart.toISOString(),
-          userTodayEnd: userTodayEnd.toISOString(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        })
+        // Client calculating UTC date range from local timezone
         
         // Fetch today's overview with timezone-aware date range
         const [todayResponse] = await Promise.all([

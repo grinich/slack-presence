@@ -14,8 +14,8 @@ interface TimelineData {
   totalMinutes: number
   messageCount: number
   hasMessages: boolean
-  blockStart: string
-  blockEnd: string
+  blockStart: string // UTC ISO string
+  blockEnd: string // UTC ISO string
 }
 
 interface UserTodayData {
@@ -164,16 +164,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     // Calculate percentage position within the visible timeline
     const position = (minutesFromStart / totalVisibleMinutes) * 100
     
-    // Debug current time positioning
-    console.log('Current time debug:', {
-      currentTime: `${currentHour}:${currentMinute.toString().padStart(2, '0')}`,
-      visibleRange: `${visibleStartHour}:00 - ${visibleEndHour}:59`,
-      hoursFromStart,
-      minutesFromStart,
-      totalVisibleMinutes,
-      position: position.toFixed(2) + '%',
-      shouldShow: currentHour >= visibleStartHour && currentHour <= visibleEndHour
-    })
+    // Current time position calculated
     
     return position
   }
@@ -182,8 +173,6 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
 
   // Memoize expensive filtering and sorting operations
   const sortedUsers = useMemo(() => {
-    console.log('TodayOverview processing users:', users.length)
-    
     // Filter out "Team Analytics" user and sort by timezone offset
     const filteredUsers = users.filter(user => 
       user.name && !user.name.toLowerCase().includes('team analytics')
@@ -251,15 +240,6 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             <div className="flex items-center flex-1 relative h-4">
               {(() => {
                 const visibleSlots = user.timeline.filter(slot => slot.hour >= 5) // Show 5AM-11:59PM
-                // Debug: Log timeline block count for first user
-                if (user === sortedUsers[0]) {
-                  console.log('Timeline debug:', {
-                    totalSlots: user.timeline.length,
-                    visibleSlots: visibleSlots.length,
-                    hoursShown: `${Math.min(...visibleSlots.map(s => s.hour))}:00 - ${Math.max(...visibleSlots.map(s => s.hour))}:59`,
-                    expectedSlots: 19 * 4 // 19 hours * 4 quarters per hour
-                  })
-                }
                 return visibleSlots.map((slot) => {
                   const startTime = formatTime(slot.hour, slot.quarter)
                   

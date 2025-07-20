@@ -17,21 +17,13 @@ export async function GET(request: Request) {
       // Use client-provided UTC date range
       todayStart = new Date(startParam)
       todayEnd = new Date(endParam)
-      console.log('Today overview using client dates:', {
-        startParam,
-        endParam,
-        todayStart: todayStart.toISOString(),
-        todayEnd: todayEnd.toISOString()
-      })
+      // Client-provided date range
     } else {
       // Fallback to UTC today
       const now = new Date()
       todayStart = startOfDay(now)
       todayEnd = endOfDay(now)
-      console.log('Today overview using server UTC dates:', {
-        todayStart: todayStart.toISOString(),
-        todayEnd: todayEnd.toISOString()
-      })
+      // Using server UTC dates
     }
     
     // Get all active users with their presence data for today (optimized)
@@ -73,11 +65,12 @@ export async function GET(request: Request) {
       
       for (let hour = 0; hour < 24; hour++) {
         for (let quarter = 0; quarter < 4; quarter++) {
-          const blockStart = new Date(todayStart)
-          blockStart.setUTCHours(hour, quarter * 15, 0, 0)
+          // Create blocks that represent the user's local time hours
+          // Since todayStart is already the start of the user's day in UTC,
+          // we can add hours/minutes directly
+          const blockStart = new Date(todayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
           
-          const blockEnd = new Date(blockStart)
-          blockEnd.setUTCMinutes(blockEnd.getUTCMinutes() + 15)
+          const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
           
           // Find presence logs within this 15-minute block
           const blockLogs = user.presenceLogs.filter(log => 
@@ -121,9 +114,11 @@ export async function GET(request: Request) {
             totalMinutes,
             messageCount,
             hasMessages,
-            blockStart: blockStart.toISOString(),
-            blockEnd: blockEnd.toISOString()
+            blockStart: blockStart.toISOString(), // UTC timestamp
+            blockEnd: blockEnd.toISOString() // UTC timestamp
           })
+          
+          // Timeline block created
         }
       }
       
@@ -142,8 +137,7 @@ export async function GET(request: Request) {
       }
     })
     
-    // Debug: Log timezone data
-    console.log('Today overview user timezones:', userTodayData.map(u => ({ name: u.name, timezone: u.timezone })))
+    // User timezone data processed
     
     // Don't sort here - let the frontend handle timezone sorting
     
