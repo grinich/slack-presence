@@ -30,11 +30,11 @@ interface SlackUsersResponse {
 
 const prisma = new PrismaClient()
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Verify the request is from Vercel Cron by checking for Vercel-specific headers
-    const cronHeader = request.headers.get('x-vercel-cron')
-    if (!cronHeader) {
+    // Verify the request is from Vercel Cron by checking Authorization header
+    const authHeader = request.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized - not from Vercel cron' }, { status: 401 })
     }
 
