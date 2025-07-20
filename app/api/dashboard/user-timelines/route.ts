@@ -24,15 +24,15 @@ export async function GET(request: NextRequest) {
     
     let baseDate: Date
     if (startParam) {
-      baseDate = new Date(startParam)
+      baseDate = new Date(startParam) // Client sends UTC date
     } else {
-      baseDate = new Date() // Fallback to UTC today
+      baseDate = new Date() // Fallback to server UTC today
     }
     
     const workdays = []
     
-    // Get the last 7 days including today and weekends
-    const userTimezoneToday = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
+    // Keep the date in UTC - don't convert to server local timezone
+    const userTimezoneToday = new Date(baseDate.getTime())
     
     // Generate last 7 days (including today)
     for (let i = 0; i < 7; i++) {
@@ -40,11 +40,11 @@ export async function GET(request: NextRequest) {
       workdays.push(new Date(date))
     }
     
-    // Get date range for all workdays
+    // Get date range for all workdays using UTC
     const oldestWorkday = workdays[workdays.length - 1]
     const newestWorkday = workdays[0]
-    const rangeStart = startOfDay(oldestWorkday)
-    const rangeEnd = endOfDay(newestWorkday)
+    const rangeStart = new Date(oldestWorkday.getUTCFullYear(), oldestWorkday.getUTCMonth(), oldestWorkday.getUTCDate())
+    const rangeEnd = new Date(newestWorkday.getUTCFullYear(), newestWorkday.getUTCMonth(), newestWorkday.getUTCDate(), 23, 59, 59, 999)
 
     // Batch fetch all presence logs for all users across all workdays
     const allPresenceLogs = await prisma.presenceLog.findMany({
@@ -81,8 +81,9 @@ export async function GET(request: NextRequest) {
       // Messages removed - using presence data only
       
       for (const workday of workdays) {
-        const dayStart = startOfDay(workday)
-        const dayEnd = endOfDay(workday)
+        // Create UTC day boundaries to match client expectations
+        const dayStart = new Date(workday.getUTCFullYear(), workday.getUTCMonth(), workday.getUTCDate())
+        const dayEnd = new Date(workday.getUTCFullYear(), workday.getUTCMonth(), workday.getUTCDate(), 23, 59, 59, 999)
         
         // Filter logs for this specific workday
         const presenceLogs = userPresenceLogs.filter((log: PresenceLog) => 
@@ -99,10 +100,10 @@ export async function GET(request: NextRequest) {
         for (let hour = 0; hour < 24; hour++) {
           for (let quarter = 0; quarter < 4; quarter++) {
             const blockStart = new Date(dayStart)
-            blockStart.setHours(hour, quarter * 15, 0, 0)
+            blockStart.setUTCHours(hour, quarter * 15, 0, 0)
             
             const blockEnd = new Date(dayStart)
-            blockEnd.setHours(hour, quarter * 15 + 14, 59, 999)
+            blockEnd.setUTCHours(hour, quarter * 15 + 14, 59, 999)
             
             // Find logs within this 15-minute block
             const blockLogs = presenceLogs.filter((log: PresenceLog) => 
