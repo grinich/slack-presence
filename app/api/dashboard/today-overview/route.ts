@@ -60,6 +60,12 @@ export async function GET(request: Request) {
     
     // Process each user's timeline data for today
     const userTodayData = users.map(user => {
+      // Check if user has been active in the last 15 minutes
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000)
+      const recentActiveLogs = user.presenceLogs.filter(log => 
+        log.timestamp >= fifteenMinutesAgo && log.status === 'active'
+      )
+      const isCurrentlyOnline = recentActiveLogs.length > 0
       // Create timeline blocks for 24 hours (96 15-minute blocks)
       const timeline = []
       
@@ -133,7 +139,8 @@ export async function GET(request: Request) {
         timezone: user.timezone,
         timeline,
         totalActiveMinutes,
-        messageCount: totalMessageCount
+        messageCount: totalMessageCount,
+        isCurrentlyOnline
       }
     })
     

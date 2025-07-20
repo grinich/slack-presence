@@ -61,6 +61,7 @@ interface UserTodayData {
   }[]
   totalActiveMinutes: number
   messageCount: number
+  isCurrentlyOnline: boolean
 }
 
 
@@ -130,7 +131,7 @@ export default function AuthenticatedDashboard() {
             totalActiveMinutes: user.totalActiveMinutes,
             todayActiveMinutes: user.totalActiveMinutes,
             lastSeen: null, // Not available in current API
-            isOnline: user.totalActiveMinutes > 0 // Simple heuristic - user is "online" if they had activity today
+            isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
           }))
           
           setData(transformedData)
