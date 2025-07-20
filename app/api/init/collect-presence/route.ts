@@ -64,21 +64,12 @@ export async function POST() {
         const presenceData = await presenceResponse.json()
 
         if (presenceData.ok) {
-          // Enhanced presence logic to handle cached data better
-          let actualStatus = presenceData.presence === 'active' ? 'active' : 'away'
+          // Use correct Slack presence logic:
+          // User is active if online=true AND neither auto_away nor manual_away are true
+          let actualStatus = 'away' // Default to away
           
-          // If user shows as active but has auto_away or very old last_activity, treat as away
-          if (presenceData.presence === 'active' && presenceData.auto_away) {
-            actualStatus = 'away'
-          }
-          
-          // If last_activity is very old (>10 minutes), likely away regardless of reported status
-          if (presenceData.last_activity) {
-            const lastActivityTime = new Date(presenceData.last_activity * 1000)
-            const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000)
-            if (lastActivityTime < tenMinutesAgo && presenceData.presence === 'active') {
-              actualStatus = 'away'
-            }
+          if (presenceData.online && !presenceData.auto_away && !presenceData.manual_away) {
+            actualStatus = 'active'
           }
           
           // Store presence data
@@ -88,12 +79,12 @@ export async function POST() {
               status: actualStatus,
               timestamp: new Date(),
               metadata: JSON.stringify({
+                online: presenceData.online,
                 auto_away: presenceData.auto_away,
                 manual_away: presenceData.manual_away,
                 connection_count: presenceData.connection_count,
                 last_activity: presenceData.last_activity,
-                raw_presence: presenceData.presence, // Store original for debugging
-                adjusted_status: actualStatus !== presenceData.presence
+                raw_presence: presenceData.presence // Store original for reference
               })
             }
           })
