@@ -214,15 +214,11 @@ export default function AuthenticatedDashboard() {
           setIsRefreshing(true)
           setLastRefresh(Date.now())
           
-          // Use proper UTC date handling
-          const userDateStart = new Date(Date.UTC(
-            selectedDate.getFullYear(), 
-            selectedDate.getMonth(), 
-            selectedDate.getDate()
-          ))
+          // Calculate selected date in user's local timezone and convert to UTC for server (match main effect)
+          const userDateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
           const userDateEnd = new Date(userDateStart)
-          userDateEnd.setUTCDate(userDateEnd.getUTCDate() + 1)
-          userDateEnd.setUTCMilliseconds(-1)
+          userDateEnd.setDate(userDateEnd.getDate() + 1)
+          userDateEnd.setMilliseconds(-1) // End of day
           
           const [todayResponse] = await Promise.all([
             fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
