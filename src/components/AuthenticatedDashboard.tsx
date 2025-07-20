@@ -558,8 +558,13 @@ export default function AuthenticatedDashboard() {
                     <Calendar className="h-4 w-4 text-gray-500" />
                     <input
                       type="date"
-                      value={selectedDate.toISOString().split('T')[0]}
-                      onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                      value={selectedDate.getFullYear() + '-' + 
+                             String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                             String(selectedDate.getDate()).padStart(2, '0')}
+                      onChange={(e) => {
+                        const [year, month, day] = e.target.value.split('-').map(Number)
+                        setSelectedDate(new Date(year, month - 1, day))
+                      }}
                       className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
                     />
                   </div>
