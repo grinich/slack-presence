@@ -160,10 +160,15 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: timelineData,
     })
+    
+    // Add cache headers to reduce database load
+    response.headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+    
+    return response
 
   } catch (error) {
     console.error('Error fetching user timelines:', error)

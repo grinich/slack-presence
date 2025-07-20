@@ -73,6 +73,7 @@ export default function AuthenticatedDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<number>(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -85,6 +86,11 @@ export default function AuthenticatedDashboard() {
     async function fetchData(force = false) {
       if (status !== 'authenticated') return
       
+      // Skip if already refreshing to prevent concurrent requests
+      if (isRefreshing && !force) {
+        return
+      }
+      
       // Skip refresh if not enough time has passed (unless forced)
       const now = Date.now()
       if (!force && now - lastRefresh < 25000) { // 25 second minimum
@@ -92,7 +98,8 @@ export default function AuthenticatedDashboard() {
       }
       
       try {
-        // Fetching dashboard data
+        // Mark as refreshing to prevent concurrent requests
+        setIsRefreshing(true)
         setLastRefresh(now)
         
         // Calculate today in user's local timezone and convert to UTC for server
@@ -129,10 +136,13 @@ export default function AuthenticatedDashboard() {
           setData(transformedData)
           setTodayData(todayResult.data)
           
-          // Extract user IDs and fetch timeline data in batch
+          // Extract user IDs and fetch timeline data in batch only if needed
           const userIds = todayResult.data.map((user: UserTodayData) => user.id)
+          const currentUserIds = data?.map(u => u.id).sort().join(',') || ''
+          const newUserIds = userIds.sort().join(',')
           
-          if (userIds.length > 0) {
+          // Only fetch timeline data if users changed or we don't have timeline data yet
+          if (userIds.length > 0 && (!timelineData || currentUserIds !== newUserIds)) {
             const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userTodayStart.toISOString()}`)
             const timelineResult = await timelineResponse.json()
             
@@ -152,6 +162,7 @@ export default function AuthenticatedDashboard() {
         setError('Network error')
       } finally {
         setLoading(false)
+        setIsRefreshing(false) // Always clear refreshing state
       }
     }
 
