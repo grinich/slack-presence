@@ -73,6 +73,16 @@ export async function POST(request: NextRequest) {
           // Simple presence logic - just use the presence field directly
           const actualStatus = presenceData.presence === 'active' ? 'active' : 'away'
           
+          console.log(`🟢 Presence check for ${user.name || user.slackUserId}: ${JSON.stringify({
+            presence: presenceData.presence,
+            online: presenceData.online,
+            auto_away: presenceData.auto_away,
+            manual_away: presenceData.manual_away,
+            connection_count: presenceData.connection_count,
+            last_activity: presenceData.last_activity,
+            actualStatus
+          })}`)
+          
           // Store presence data
           await prisma.presenceLog.create({
             data: {
