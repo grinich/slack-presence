@@ -64,13 +64,8 @@ export async function POST() {
         const presenceData = await presenceResponse.json()
 
         if (presenceData.ok) {
-          // Use correct Slack presence logic:
-          // User is active if online=true AND neither auto_away nor manual_away are true
-          let actualStatus = 'away' // Default to away
-          
-          if (presenceData.online && !presenceData.auto_away && !presenceData.manual_away) {
-            actualStatus = 'active'
-          }
+          // Simple presence logic - just use the presence field directly
+          const actualStatus = presenceData.presence === 'active' ? 'active' : 'away'
           
           // Store presence data
           await prisma.presenceLog.create({
