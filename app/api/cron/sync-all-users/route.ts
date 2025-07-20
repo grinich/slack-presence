@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/db'
 
 interface SlackMember {
   id: string
@@ -28,13 +28,17 @@ interface SlackUsersResponse {
   error?: string
 }
 
-const prisma = new PrismaClient()
-
 export async function GET(request: NextRequest) {
   try {
-    // Verify the request is from Vercel Cron by checking Authorization header
+    // Enhanced cron authentication security
+    if (!process.env.CRON_SECRET || process.env.CRON_SECRET.length < 32) {
+      console.error('Invalid cron configuration - secret too short or missing')
+      return NextResponse.json({ error: 'Invalid cron configuration' }, { status: 500 })
+    }
+
     const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      console.warn('Unauthorized cron attempt from:', request.headers.get('x-forwarded-for') || 'unknown')
       return NextResponse.json({ error: 'Unauthorized - not from Vercel cron' }, { status: 401 })
     }
 

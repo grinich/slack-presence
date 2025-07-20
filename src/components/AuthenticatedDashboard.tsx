@@ -202,21 +202,28 @@ export default function AuthenticatedDashboard() {
     }
   }, [status, lastRefresh, router])
 
-  // Separate effect for handling date changes - force refresh immediately
+  // Separate effect for date changes - force immediate refresh
   useEffect(() => {
     if (status === 'authenticated') {
-      async function fetchDataForNewDate() {
+      // Force refresh when date changes by calling the main fetchData function
+      async function fetchForDateChange() {
+        setLoading(true)
+        setError(null)
+        
         try {
           setIsRefreshing(true)
           setLastRefresh(Date.now())
           
-          // Calculate selected date in user's local timezone and convert to UTC for server
-          const userDateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+          // Use proper UTC date handling
+          const userDateStart = new Date(Date.UTC(
+            selectedDate.getFullYear(), 
+            selectedDate.getMonth(), 
+            selectedDate.getDate()
+          ))
           const userDateEnd = new Date(userDateStart)
-          userDateEnd.setDate(userDateEnd.getDate() + 1)
-          userDateEnd.setMilliseconds(-1) // End of day
+          userDateEnd.setUTCDate(userDateEnd.getUTCDate() + 1)
+          userDateEnd.setUTCMilliseconds(-1)
           
-          // Fetch selected date's overview with timezone-aware date range
           const [todayResponse] = await Promise.all([
             fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
           ])
@@ -226,7 +233,6 @@ export default function AuthenticatedDashboard() {
           ])
           
           if (todayResult.success) {
-            // Transform UserTodayData to UserStats format
             const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
               id: user.id,
               name: user.name,
@@ -234,22 +240,20 @@ export default function AuthenticatedDashboard() {
               timezone: user.timezone,
               totalActiveMinutes: user.totalActiveMinutes,
               todayActiveMinutes: user.totalActiveMinutes,
-              lastSeen: null, // Not available in current API
-              isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
+              lastSeen: null,
+              isOnline: user.isCurrentlyOnline
             }))
             
             setData(transformedData)
             setTodayData(todayResult.data)
             
-            // Extract user IDs and fetch timeline data in batch
+            // Always fetch fresh timeline data for date changes
             const userIds = todayResult.data.map((user: UserTodayData) => user.id)
-            
             if (userIds.length > 0) {
               const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
               const timelineResult = await timelineResponse.json()
               
               if (timelineResult.success) {
-                // Convert array to map for easier lookup
                 const timelineMap = new Map()
                 timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
                   timelineMap.set(userTimeline.userId, userTimeline.workdays)
@@ -260,7 +264,8 @@ export default function AuthenticatedDashboard() {
           } else {
             setError(todayResult.error || 'Failed to fetch data')
           }
-        } catch {
+        } catch (error) {
+          console.error('Date change fetch error:', error)
           setError('Network error')
         } finally {
           setLoading(false)
@@ -268,7 +273,7 @@ export default function AuthenticatedDashboard() {
         }
       }
 
-      fetchDataForNewDate()
+      fetchForDateChange()
     }
   }, [selectedDate, status])
 

@@ -110,8 +110,17 @@ const handler = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === 'slack') {
         try {
-          console.log('SignIn callback - User data:', JSON.stringify(user, null, 2))
-          console.log('SignIn callback - Account data:', JSON.stringify(account, null, 2))
+          // Safe logging - no sensitive data in production
+          if (process.env.NODE_ENV === 'development') {
+            console.log('SignIn callback - User ID:', user.slackUserId)
+            console.log('SignIn callback - Account provider:', account.provider)
+          } else {
+            console.log('User signin successful:', { 
+              userId: user.slackUserId, 
+              teamId: user.slackTeamId,
+              provider: account.provider 
+            })
+          }
           
           // Check if user exists, if not create them
           const existingUser = await prisma.user.findUnique({
