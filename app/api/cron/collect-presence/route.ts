@@ -94,12 +94,14 @@ export async function GET(request: NextRequest) {
               status: actualStatus,
               timestamp: new Date(),
               metadata: JSON.stringify({
-                online: presenceData.online,
-                auto_away: presenceData.auto_away,
-                manual_away: presenceData.manual_away,
-                connection_count: presenceData.connection_count,
-                last_activity: presenceData.last_activity,
-                raw_presence: presenceData.presence // Store original for reference
+                online: presenceData.online ?? null,
+                auto_away: presenceData.auto_away ?? null,
+                manual_away: presenceData.manual_away ?? null,
+                connection_count: presenceData.connection_count ?? null,
+                last_activity: presenceData.last_activity ?? null,
+                raw_presence: presenceData.presence ?? null,
+                // Store the complete raw response for debugging
+                full_response: presenceData
               })
             }
           })
