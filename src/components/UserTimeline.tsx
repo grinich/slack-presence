@@ -135,7 +135,7 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
           <div key={dayIndex} className="flex items-center space-x-2">
             <div className="w-8 h-4 bg-gray-200 animate-pulse rounded-sm" />
             <div className="flex space-x-0.5">
-              {Array.from({ length: 76 }, (_, i) => ( // 96 - 20 = 76 blocks (removed hours 0-4, keeping 5-23)
+              {Array.from({ length: 96 }, (_, i) => ( // 24 hours * 4 quarters = 96 blocks
                 <div key={i} className="w-1 h-4 bg-gray-200 animate-pulse rounded-sm" />
               ))}
             </div>
@@ -211,22 +211,6 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
     
     const isCurrentSlot = currentHour === hour && currentQuarter === quarter
     
-    // Debug logging
-    if (isSameDay || isCurrentSlot) {
-      console.log('Time slot check (same day or current):', {
-        date,
-        hour,
-        quarter,
-        currentHour,
-        currentMinutes,
-        currentQuarter,
-        isSameDay,
-        isCurrentSlot,
-        nowLocal: now.toString(),
-        nowISO: now.toISOString(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      })
-    }
     
     return isCurrentSlot
   }
@@ -238,11 +222,12 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
         <div className="w-20 flex-shrink-0" /> {/* Space for day names */}
         <div className="w-12 flex-shrink-0" /> {/* Space for dates */}
         <div className="flex justify-between text-xs text-gray-500 flex-1">
-          <span>5AM</span>
-          <span>9AM</span>
-          <span>1PM</span>
-          <span>5PM</span>
-          <span>9PM</span>
+          <span>12AM</span>
+          <span>4AM</span>
+          <span>8AM</span>
+          <span>12PM</span>
+          <span>4PM</span>
+          <span>8PM</span>
           <span>11:59PM</span>
         </div>
         <div className="w-12 text-xs text-gray-500 font-medium text-right flex-shrink-0">
@@ -284,7 +269,7 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
               {/* Timeline blocks - 15-minute granularity (5AM-9PM, 9PM-12AM) */}
               <div className="flex items-center flex-1 relative">
                 {workday.timeline
-                  .filter(slot => slot.hour >= 5) // Show 5AM-11:59PM (hide only 12AM-4:59AM)
+                  // Show full 24 hours
                   .map((slot) => {
                   const isCurrentTime = isCurrentTimeSlot(workday.date, slot.hour, slot.quarter)
                   const startTime = formatTime(slot.hour, slot.quarter)
@@ -356,18 +341,15 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
           const currentHour = now.getHours()
           const currentMinute = now.getMinutes()
           
-          // Skip if current time is in hidden hours (0-4)
-          if (currentHour < 5) return null
-          
-          // Timeline shows hours 5-23 (5AM to 11:59PM)
-          const visibleStartHour = 5
+          // Timeline shows full 24 hours (0-23)
+          const visibleStartHour = 0
           const visibleEndHour = 23
-          const totalVisibleHours = visibleEndHour - visibleStartHour + 1 // 19 hours
+          const totalVisibleHours = 24 // Full day
           
           // Calculate current position within visible hours
           const hoursFromStart = currentHour - visibleStartHour
           const minutesFromStart = hoursFromStart * 60 + currentMinute
-          const totalVisibleMinutes = totalVisibleHours * 60 // 19 hours * 60 minutes
+          const totalVisibleMinutes = totalVisibleHours * 60 // 24 hours * 60 minutes
           
           // Calculate percentage position within the visible timeline
           const currentTimePosition = (minutesFromStart / totalVisibleMinutes) * 100

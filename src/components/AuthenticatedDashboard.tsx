@@ -220,6 +220,7 @@ export default function AuthenticatedDashboard() {
           userDateEnd.setDate(userDateEnd.getDate() + 1)
           userDateEnd.setMilliseconds(-1) // End of day
           
+
           const [todayResponse] = await Promise.all([
             fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
           ])

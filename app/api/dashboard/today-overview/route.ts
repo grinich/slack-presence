@@ -17,13 +17,12 @@ export async function GET(request: Request) {
       // Use client-provided UTC date range
       todayStart = new Date(startParam)
       todayEnd = new Date(endParam)
-      // Client-provided date range
+      
     } else {
       // Fallback to UTC today
       const now = new Date()
       todayStart = startOfDay(now)
       todayEnd = endOfDay(now)
-      // Using server UTC dates
     }
     
     // Get all active users with their presence data for today (optimized)

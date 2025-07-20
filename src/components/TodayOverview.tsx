@@ -147,19 +147,15 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     const currentHour = currentTime.getHours()
     const currentMinute = currentTime.getMinutes()
     
-    // Skip if current time is in hidden hours (0-4)
-    if (currentHour < 5) return null
-    
-    // Timeline shows hours 5-23 (5AM to 11:59PM)
-    // Calculate position within just the visible hours
-    const visibleStartHour = 5
-    const visibleEndHour = 23 // 11PM
-    const totalVisibleHours = visibleEndHour - visibleStartHour + 1 // 19 hours (5AM through 11PM)
+    // Timeline shows full 24 hours (0-23)
+    const visibleStartHour = 0
+    const visibleEndHour = 23
+    const totalVisibleHours = 24 // Full day
     
     // Calculate current position within visible hours
     const hoursFromStart = currentHour - visibleStartHour
     const minutesFromStart = hoursFromStart * 60 + currentMinute
-    const totalVisibleMinutes = totalVisibleHours * 60 // 19 hours * 60 minutes
+    const totalVisibleMinutes = totalVisibleHours * 60 // 24 hours * 60 minutes
     
     // Calculate percentage position within the visible timeline
     const position = (minutesFromStart / totalVisibleMinutes) * 100
@@ -208,11 +204,12 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
         <div className="w-20 flex-shrink-0" /> {/* Space for names */}
         <div className="w-12 flex-shrink-0" /> {/* Space for timezone */}
         <div className="flex justify-between text-xs text-gray-500 flex-1">
-          <span>5AM</span>
-          <span>9AM</span>
-          <span>1PM</span>
-          <span>5PM</span>
-          <span>9PM</span>
+          <span>12AM</span>
+          <span>4AM</span>
+          <span>8AM</span>
+          <span>12PM</span>
+          <span>4PM</span>
+          <span>8PM</span>
           <span>11:59PM</span>
         </div>
         <div className="w-12 text-xs text-gray-500 font-medium text-right flex-shrink-0">
@@ -239,7 +236,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             {/* Timeline blocks */}
             <div className="flex items-center flex-1 relative h-4">
               {(() => {
-                const visibleSlots = user.timeline.filter(slot => slot.hour >= 5) // Show 5AM-11:59PM
+                const visibleSlots = user.timeline // Show full 24 hours
                 return visibleSlots.map((slot) => {
                   const startTime = formatTime(slot.hour, slot.quarter)
                   
