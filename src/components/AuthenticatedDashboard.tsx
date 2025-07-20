@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Clock, Activity, TrendingUp, LogOut } from 'lucide-react'
@@ -76,6 +77,11 @@ export default function AuthenticatedDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<number>(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [hoveredUser, setHoveredUser] = useState<{
+    user: UserTodayData
+    x: number
+    y: number
+  } | null>(null)
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -364,8 +370,16 @@ export default function AuthenticatedDashboard() {
                   {todayData?.filter(user => user.isCurrentlyOnline).map((user) => (
                     <div 
                       key={user.id} 
-                      className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1 cursor-help"
-                      title={formatLastSeen(user.lastActiveTime)}
+                      className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setHoveredUser({
+                          user,
+                          x: rect.left + rect.width / 2,
+                          y: rect.top - 10
+                        })
+                      }}
+                      onMouseLeave={() => setHoveredUser(null)}
                     >
                       <div className="relative">
                         {user.avatarUrl ? (
@@ -546,6 +560,21 @@ export default function AuthenticatedDashboard() {
             </Card>
         </div>
       </div>
+
+      {/* Custom Tooltip */}
+      {hoveredUser && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed z-50 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none"
+          style={{
+            left: hoveredUser.x,
+            top: hoveredUser.y,
+            transform: 'translateX(-50%)'
+          }}
+        >
+          {formatLastSeen(hoveredUser.user.lastActiveTime)}
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
