@@ -282,29 +282,34 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
         
         {/* Shared vertical current time indicator that spans all rows */}
         {currentTimePosition !== null && (
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-destructive z-10 pointer-events-none rounded-full"
-            style={{
-              left: `calc(10rem + (100% - 14rem) * ${currentTimePosition / 100})`, 
-              // 10rem = name(6rem) + gap(0.75rem) + timezone(3rem) + gap(0.75rem)
-              // 14rem = total fixed width including hours column(4rem) and final gap(0.75rem)  
-              // (100% - 14rem) = actual timeline area width
-              // currentTimePosition/100 = percentage as decimal within timeline area
-            }}
-          >
-            {/* Current time display */}
-            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-medium text-destructive-foreground bg-destructive px-2 py-1 rounded-md whitespace-nowrap shadow-sm">
+          <>
+            {/* Current time display positioned at header level */}
+            <div 
+              className="absolute -top-6 text-xs font-medium text-destructive-foreground bg-destructive px-2 py-1 rounded-md whitespace-nowrap shadow-sm z-20"
+              style={{
+                left: `calc(10rem + (100% - 14rem) * ${currentTimePosition / 100})`,
+                transform: 'translateX(-50%)'
+              }}
+            >
               {currentTime.toLocaleTimeString('en-US', { 
                 hour: 'numeric', 
                 minute: '2-digit',
                 hour12: true 
               })}
             </div>
-            {/* Top indicator */}
-            <div className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
-            {/* Bottom indicator */}
-            <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
-          </div>
+            {/* Red line */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-destructive z-10 pointer-events-none rounded-full"
+              style={{
+                left: `calc(10rem + (100% - 14rem) * ${currentTimePosition / 100})`, 
+              }}
+            >
+              {/* Top indicator */}
+              <div className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
+              {/* Bottom indicator */}
+              <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
+            </div>
+          </>
         )}
       </div>
 
