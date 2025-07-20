@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Users, Clock, Activity, TrendingUp, LogOut } from 'lucide-react'
+import { Users, Clock, Activity, TrendingUp, LogOut, Calendar } from 'lucide-react'
 import UserTimeline from '@/components/UserTimeline'
 import TodayOverview from '@/components/TodayOverview'
 
@@ -82,6 +82,7 @@ export default function AuthenticatedDashboard() {
     x: number
     y: number
   } | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -110,18 +111,17 @@ export default function AuthenticatedDashboard() {
         setIsRefreshing(true)
         setLastRefresh(now)
         
-        // Calculate today in user's local timezone and convert to UTC for server
-        const userNow = new Date()
-        const userTodayStart = new Date(userNow.getFullYear(), userNow.getMonth(), userNow.getDate())
-        const userTodayEnd = new Date(userTodayStart)
-        userTodayEnd.setDate(userTodayEnd.getDate() + 1)
-        userTodayEnd.setMilliseconds(-1) // End of day
+        // Calculate selected date in user's local timezone and convert to UTC for server
+        const userDateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+        const userDateEnd = new Date(userDateStart)
+        userDateEnd.setDate(userDateEnd.getDate() + 1)
+        userDateEnd.setMilliseconds(-1) // End of day
         
         // Client calculating UTC date range from local timezone
         
-        // Fetch today's overview with timezone-aware date range
+        // Fetch selected date's overview with timezone-aware date range
         const [todayResponse] = await Promise.all([
-          fetch(`/api/dashboard/today-overview?start=${userTodayStart.toISOString()}&end=${userTodayEnd.toISOString()}`)
+          fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
         ])
         
         const [todayResult] = await Promise.all([
@@ -151,7 +151,7 @@ export default function AuthenticatedDashboard() {
           
           // Only fetch timeline data if users changed or we don't have timeline data yet
           if (userIds.length > 0 && (!timelineData || currentUserIds !== newUserIds)) {
-            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userTodayStart.toISOString()}`)
+            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
             const timelineResult = await timelineResponse.json()
             
             if (timelineResult.success) {
@@ -200,7 +200,7 @@ export default function AuthenticatedDashboard() {
         clearInterval(refreshInterval)
       }
     }
-  }, [status, lastRefresh, router])
+  }, [status, lastRefresh, router, selectedDate])
 
 
 
@@ -362,7 +362,12 @@ export default function AuthenticatedDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center space-x-2 text-sm">
                   <Users className="h-4 w-4" />
-                  <span>Currently Online ({todayData?.filter(user => user.isCurrentlyOnline).length || 0})</span>
+                  <span>
+                    {selectedDate.toDateString() === new Date().toDateString() 
+                      ? `Currently Online (${todayData?.filter(user => user.isCurrentlyOnline).length || 0})`
+                      : `Active on ${selectedDate.toLocaleDateString()} (${todayData?.filter(user => user.isCurrentlyOnline).length || 0})`
+                    }
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
@@ -471,10 +476,23 @@ export default function AuthenticatedDashboard() {
             {/* Today's Overview */}
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Today&apos;s Activity Overview</CardTitle>
-                <CardDescription>
-                  Real-time presence timeline for all team members today
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Activity Overview</CardTitle>
+                    <CardDescription>
+                      Presence timeline for all team members
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <input
+                      type="date"
+                      value={selectedDate.toISOString().split('T')[0]}
+                      onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {todayData ? (
@@ -541,7 +559,10 @@ export default function AuthenticatedDashboard() {
                         <div className="text-right">
                           <p className="font-medium">{formatMinutes(user.totalActiveMinutes)}</p>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Today: {formatMinutes(user.todayActiveMinutes)}
+                            {selectedDate.toDateString() === new Date().toDateString() 
+                              ? `Today: ${formatMinutes(user.todayActiveMinutes)}`
+                              : `${selectedDate.toLocaleDateString()}: ${formatMinutes(user.todayActiveMinutes)}`
+                            }
                           </p>
                         </div>
                       </div>
