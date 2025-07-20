@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Clock, Activity, TrendingUp, LogOut, Calendar } from 'lucide-react'
 import UserTimeline from '@/components/UserTimeline'
@@ -83,6 +83,7 @@ export default function AuthenticatedDashboard() {
     y: number
   } | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -91,91 +92,87 @@ export default function AuthenticatedDashboard() {
     }
   }, [status, router])
 
-  useEffect(() => {
-    async function fetchData(force = false) {
-      if (status !== 'authenticated') return
-      
-      // Skip if already refreshing to prevent concurrent requests
-      if (isRefreshing && !force) {
-        return
-      }
-      
-      // Skip refresh if not enough time has passed (unless forced)
-      const now = Date.now()
-      if (!force && now - lastRefresh < 25000) { // 25 second minimum
-        return
-      }
-      
-      try {
-        // Mark as refreshing to prevent concurrent requests
-        setIsRefreshing(true)
-        setLastRefresh(now)
-        
-        // Calculate selected date in user's local timezone and convert to UTC for server
-        const userDateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
-        const userDateEnd = new Date(userDateStart)
-        userDateEnd.setDate(userDateEnd.getDate() + 1)
-        userDateEnd.setMilliseconds(-1) // End of day
-        
-        // Client calculating UTC date range from local timezone
-        
-        // Fetch selected date's overview with timezone-aware date range
-        const [todayResponse] = await Promise.all([
-          fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
-        ])
-        
-        const [todayResult] = await Promise.all([
-          todayResponse.json()
-        ])
-        
-        if (todayResult.success) {
-          // Transform UserTodayData to UserStats format
-          const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
-            id: user.id,
-            name: user.name,
-            avatarUrl: user.avatarUrl,
-            timezone: user.timezone,
-            totalActiveMinutes: user.totalActiveMinutes,
-            todayActiveMinutes: user.totalActiveMinutes,
-            lastSeen: null, // Not available in current API
-            isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
-          }))
-          
-          setData(transformedData)
-          setTodayData(todayResult.data)
-          
-          // Extract user IDs and fetch timeline data in batch only if needed
-          const userIds = todayResult.data.map((user: UserTodayData) => user.id)
-          const currentUserIds = data?.map(u => u.id).sort().join(',') || ''
-          const newUserIds = userIds.sort().join(',')
-          
-          // Only fetch timeline data if users changed or we don't have timeline data yet
-          if (userIds.length > 0 && (!timelineData || currentUserIds !== newUserIds)) {
-            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
-            const timelineResult = await timelineResponse.json()
-            
-            if (timelineResult.success) {
-              // Convert array to map for easier lookup
-              const timelineMap = new Map()
-              timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
-                timelineMap.set(userTimeline.userId, userTimeline.workdays)
-              })
-              setTimelineData(timelineMap)
-            }
-          }
-        } else {
-          setError(todayResult.error || 'Failed to fetch data')
-        }
-      } catch {
-        setError('Network error')
-      } finally {
-        setLoading(false)
-        setIsRefreshing(false) // Always clear refreshing state
-      }
+  // Consolidated fetch function to eliminate duplication
+  const fetchDataForDate = useCallback(async (targetDate: Date, force = false) => {
+    if (status !== 'authenticated') return
+    
+    // Skip if already refreshing to prevent concurrent requests
+    if (isRefreshing && !force) {
+      return
     }
+    
+    // Skip refresh if not enough time has passed (unless forced)
+    const now = Date.now()
+    if (!force && now - lastRefresh < 25000) { // 25 second minimum
+      return
+    }
+    
+    try {
+      // Mark as refreshing to prevent concurrent requests
+      setIsRefreshing(true)
+      setLastRefresh(now)
+      
+      // Calculate selected date in user's local timezone and convert to UTC for server
+      const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+      const userDateEnd = new Date(userDateStart)
+      userDateEnd.setDate(userDateEnd.getDate() + 1)
+      userDateEnd.setMilliseconds(-1) // End of day
+      
+      // Fetch selected date's overview with timezone-aware date range
+      const todayResponse = await fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
+      const todayResult = await todayResponse.json()
+      
+      if (todayResult.success) {
+        // Transform UserTodayData to UserStats format
+        const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          timezone: user.timezone,
+          totalActiveMinutes: user.totalActiveMinutes,
+          todayActiveMinutes: user.totalActiveMinutes,
+          lastSeen: null, // Not available in current API
+          isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
+        }))
+        
+        setData(transformedData)
+        setTodayData(todayResult.data)
+        
+        // Extract user IDs and fetch timeline data in batch only if needed
+        const userIds = todayResult.data.map((user: UserTodayData) => user.id)
+        const currentUserIds = data?.map(u => u.id).sort().join(',') || ''
+        const newUserIds = userIds.sort().join(',')
+        
+        // Only fetch timeline data if users changed or we don't have timeline data yet
+        if (userIds.length > 0 && (!timelineData || currentUserIds !== newUserIds)) {
+          const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
+          const timelineResult = await timelineResponse.json()
+          
+          if (timelineResult.success) {
+            // Convert array to map for easier lookup
+            const timelineMap = new Map()
+            timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
+              timelineMap.set(userTimeline.userId, userTimeline.workdays)
+            })
+            setTimelineData(timelineMap)
+          }
+        }
+      } else {
+        setError(todayResult.error || 'Failed to fetch data')
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setLoading(false)
+      setIsRefreshing(false) // Always clear refreshing state
+    }
+  }, [status, isRefreshing, lastRefresh, data, timelineData])
+
+  useEffect(() => {
+    if (status !== 'authenticated') return
 
     // Initial fetch
-    fetchData(true) // Force initial load
+    fetchDataForDate(selectedDate, true) // Force initial load
 
     // Auto-refresh every 30 seconds at the 15-second mark (offset from timeline)
     const now = new Date()
@@ -186,11 +183,11 @@ export default function AuthenticatedDashboard() {
     
     // First refresh aligned to 15-second mark
     const firstTimeout = setTimeout(() => {
-      fetchData()
+      fetchDataForDate(selectedDate)
       
       // Then refresh every 30 seconds
       refreshInterval = setInterval(() => {
-        fetchData()
+        fetchDataForDate(selectedDate)
       }, 30000)
     }, timeToFirstRefresh * 1000)
 
@@ -200,83 +197,18 @@ export default function AuthenticatedDashboard() {
         clearInterval(refreshInterval)
       }
     }
-  }, [status, lastRefresh, router])
+  }, [status, fetchDataForDate, selectedDate])
 
   // Separate effect for date changes - force immediate refresh
   useEffect(() => {
     if (status === 'authenticated') {
-      // Force refresh when date changes by calling the main fetchData function
-      async function fetchForDateChange() {
-        setLoading(true)
-        setError(null)
-        
-        try {
-          setIsRefreshing(true)
-          setLastRefresh(Date.now())
-          
-          // Calculate selected date in user's local timezone and convert to UTC for server (match main effect)
-          const userDateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
-          const userDateEnd = new Date(userDateStart)
-          userDateEnd.setDate(userDateEnd.getDate() + 1)
-          userDateEnd.setMilliseconds(-1) // End of day
-          
-
-          const [todayResponse] = await Promise.all([
-            fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
-          ])
-          
-          const [todayResult] = await Promise.all([
-            todayResponse.json()
-          ])
-          
-          if (todayResult.success) {
-            const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
-              id: user.id,
-              name: user.name,
-              avatarUrl: user.avatarUrl,
-              timezone: user.timezone,
-              totalActiveMinutes: user.totalActiveMinutes,
-              todayActiveMinutes: user.totalActiveMinutes,
-              lastSeen: null,
-              isOnline: user.isCurrentlyOnline
-            }))
-            
-            setData(transformedData)
-            setTodayData(todayResult.data)
-            
-            // Always fetch fresh timeline data for date changes
-            const userIds = todayResult.data.map((user: UserTodayData) => user.id)
-            if (userIds.length > 0) {
-              const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
-              const timelineResult = await timelineResponse.json()
-              
-              if (timelineResult.success) {
-                const timelineMap = new Map()
-                timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
-                  timelineMap.set(userTimeline.userId, userTimeline.workdays)
-                })
-                setTimelineData(timelineMap)
-              }
-            }
-          } else {
-            setError(todayResult.error || 'Failed to fetch data')
-          }
-        } catch (error) {
-          console.error('Date change fetch error:', error)
-          setError('Network error')
-        } finally {
-          setLoading(false)
-          setIsRefreshing(false)
-        }
-      }
-
-      fetchForDateChange()
+      fetchDataForDate(selectedDate, true)
     }
-  }, [selectedDate, status])
+  }, [selectedDate, status, fetchDataForDate])
 
 
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/logout', {
         method: 'POST'
@@ -293,7 +225,45 @@ export default function AuthenticatedDashboard() {
       // Fallback: redirect anyway
       router.push('/auth/signin')
     }
-  }
+  }, [router])
+
+  // Debounced hover handlers to reduce lag
+  const handleUserHover = useCallback((user: UserTodayData, x: number, y: number) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredUser({ user, x, y })
+    }, 150)
+  }, [])
+
+  const handleUserHoverLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    setHoveredUser(null)
+  }, [])
+
+  // Memoized expensive computations
+  const memoizedStats = useMemo(() => {
+    if (!data) return null
+    
+    const onlineUsers = data.filter(user => user.isOnline)
+    const totalActiveMinutes = data.reduce((sum, user) => sum + user.totalActiveMinutes, 0)
+    const averageActiveMinutes = Math.round(totalActiveMinutes / data.length)
+    
+    return {
+      totalUsers: data.length,
+      onlineCount: onlineUsers.length,
+      onlinePercentage: Math.round((onlineUsers.length / data.length) * 100),
+      totalActiveMinutes,
+      averageActiveMinutes
+    }
+  }, [data])
+
+  const memoizedCurrentlyOnlineUsers = useMemo(() => {
+    return todayData?.filter(user => user.isCurrentlyOnline) || []
+  }, [todayData])
 
 
   if (status === 'loading' || loading) {
@@ -402,161 +372,159 @@ export default function AuthenticatedDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-12 flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              Online
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground mb-3">
+              Presence
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              See who&apos;s online and active right now
+            <p className="text-lg text-muted-foreground max-w-md">
+              Real-time team activity and online status
             </p>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Button 
-              onClick={handleLogout}
-              variant="outline"
-              className="flex items-center space-x-2"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Logout</span>
-            </Button>
-          </div>
+          <Button 
+            onClick={handleLogout}
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign out
+          </Button>
         </div>
 
         {/* Dashboard Content */}
-        <div className="w-full">
+        <div className="space-y-8">
             {/* Online Team Members */}
-            <Card className="mb-6">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center space-x-2 text-sm">
-                  <Users className="h-4 w-4" />
-                  <span>
-                    {selectedDate.toDateString() === new Date().toDateString() 
-                      ? `Currently Online (${todayData?.filter(user => user.isCurrentlyOnline).length || 0})`
-                      : `Active on ${selectedDate.toLocaleDateString()} (${todayData?.filter(user => user.isCurrentlyOnline).length || 0})`
-                    }
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex flex-wrap gap-2">
-                  {todayData?.filter(user => user.isCurrentlyOnline).map((user) => (
-                    <div 
-                      key={user.id} 
-                      className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      onMouseEnter={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        setHoveredUser({
-                          user,
-                          x: rect.left + rect.width / 2,
-                          y: rect.top - 10
-                        })
-                      }}
-                      onMouseLeave={() => setHoveredUser(null)}
-                    >
-                      <div className="relative">
-                        {user.avatarUrl ? (
-                          <img
-                            src={user.avatarUrl}
-                            alt={user.name || 'User'}
-                            className="w-6 h-6 rounded-full"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                            <span className="text-xs font-medium">
-                              {user.name?.[0]?.toUpperCase() || 'U'}
-                            </span>
-                          </div>
-                        )}
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white bg-green-500" />
-                      </div>
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        {formatNameAsFirstName(user.name)}
-                      </span>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-2 w-2 rounded-full bg-success animate-pulse-subtle" />
+                <h2 className="text-xl font-medium text-foreground">
+                  {selectedDate.toDateString() === new Date().toDateString() 
+                    ? `Online now`
+                    : `Active on ${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                  }
+                </h2>
+                <span className="text-sm text-muted-foreground font-mono">
+                  {memoizedCurrentlyOnlineUsers.length}
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap gap-3 min-h-[3rem] items-start">
+                {memoizedCurrentlyOnlineUsers.map((user) => (
+                  <div 
+                    key={user.id} 
+                    className="group flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 cursor-pointer hover:bg-accent/50 transition-all duration-200 hover:scale-105 animate-fade-in"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      handleUserHover(user, rect.left + rect.width / 2, rect.top - 10)
+                    }}
+                    onMouseLeave={handleUserHoverLeave}
+                  >
+                    <div className="relative">
+                      {user.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.name || 'User'}
+                          className="w-8 h-8 rounded-full ring-2 ring-success/20"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center ring-2 ring-success/20">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {user.name?.[0]?.toUpperCase() || 'U'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card bg-success" />
                     </div>
-                  )) || []}
-                  {(todayData?.filter(user => user.isCurrentlyOnline).length || 0) === 0 && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">No team members currently online</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Team Overview Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{data.length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {data.filter(user => user.isOnline).length} online now
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Online Users</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{data.filter(user => user.isOnline).length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {Math.round((data.filter(user => user.isOnline).length / data.length) * 100)}% of team
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Activity</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatMinutes(data.reduce((sum, user) => sum + user.totalActiveMinutes, 0))}
+                    <span className="text-sm font-medium text-card-foreground group-hover:text-foreground transition-colors">
+                      {formatNameAsFirstName(user.name)}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Last 7 days
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Avg per User</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatMinutes(Math.round(data.reduce((sum, user) => sum + user.totalActiveMinutes, 0) / data.length))}
+                ))}
+                {memoizedCurrentlyOnlineUsers.length === 0 && (
+                  <div className="flex items-center gap-2 text-muted-foreground bg-muted/30 rounded-lg px-4 py-3">
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground opacity-50" />
+                    <span className="text-sm">No one online right now</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Weekly average
-                  </p>
-                </CardContent>
-              </Card>
+                )}
+              </div>
             </div>
 
-            {/* Today's Overview */}
-            <Card className="mb-6">
-              <CardHeader>
+            {/* Team Overview Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-card border border-border rounded-2xl p-6 hover:bg-accent/30 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                  <Users className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Team</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-semibold text-foreground">{memoizedStats?.totalUsers || 0}</div>
+                  <p className="text-sm text-muted-foreground">
+                    {memoizedStats?.onlineCount || 0} active
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-6 hover:bg-accent/30 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                  <Activity className="h-5 w-5 text-success" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Online</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-semibold text-foreground">{memoizedStats?.onlineCount || 0}</div>
+                  <p className="text-sm text-muted-foreground">
+                    {memoizedStats?.onlinePercentage || 0}% of team
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-6 hover:bg-accent/30 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                  <Clock className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Activity</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-semibold text-foreground">
+                    {formatMinutes(memoizedStats?.totalActiveMinutes || 0)}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Past 7 days
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-6 hover:bg-accent/30 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                  <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Average</span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-semibold text-foreground">
+                    {formatMinutes(memoizedStats?.averageActiveMinutes || 0)}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Per person
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Activity Timeline */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="p-6 border-b border-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Activity Overview</CardTitle>
-                    <CardDescription>
-                      Presence timeline for all team members
-                    </CardDescription>
+                    <h3 className="text-lg font-medium text-foreground">Activity Timeline</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Real-time presence data for the entire team
+                    </p>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
+                  <div className="flex items-center gap-3">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
                     <input
                       type="date"
                       value={selectedDate.getFullYear() + '-' + 
@@ -566,103 +534,98 @@ export default function AuthenticatedDashboard() {
                         const [year, month, day] = e.target.value.split('-').map(Number)
                         setSelectedDate(new Date(year, month - 1, day))
                       }}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
+                      className="px-3 py-2 border border-border rounded-lg text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
                     />
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+              </div>
+              
+              <div className="p-6">
                 {todayData ? (
                   <TodayOverview users={todayData} />
                 ) : (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-muted-foreground border-t-transparent"></div>
+                      <span className="text-sm">Loading timeline...</span>
+                    </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* User Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Team Member Activity</CardTitle>
-                <CardDescription>
-                  Individual activity breakdown for the past 7 days
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {data.map((user) => (
-                    <div key={user.id} className="p-4 border rounded-lg space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="relative">
-                            {user.avatarUrl ? (
-                              <img
-                                src={user.avatarUrl}
-                                alt={user.name || 'User'}
-                                className="w-10 h-10 rounded-full"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                                <span className="text-sm font-medium">
-                                  {user.name?.[0]?.toUpperCase() || 'U'}
-                                </span>
-                              </div>
-                            )}
-                            <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-                              user.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                            }`} />
-                          </div>
-                          <div>
-                            <div className="flex items-center space-x-3">
-                              <p className="font-medium">{user.name || 'Unknown User'}</p>
-                              {formatUserLocalTime(user.timezone) && (
-                                <span className="text-sm font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
-                                  {formatUserLocalTime(user.timezone)}
-                                </span>
-                              )}
+            {/* Team Member Details */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="p-6 border-b border-border">
+                <h3 className="text-lg font-medium text-foreground">Team Members</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Individual activity and 7-day history
+                </p>
+              </div>
+              
+              <div className="divide-y divide-border">
+                {data.map((user) => (
+                  <div key={user.id} className="p-6 hover:bg-accent/30 transition-colors">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          {user.avatarUrl ? (
+                            <img
+                              src={user.avatarUrl}
+                              alt={user.name || 'User'}
+                              className="w-12 h-12 rounded-full ring-2 ring-border"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center ring-2 ring-border">
+                              <span className="text-lg font-medium text-muted-foreground">
+                                {user.name?.[0]?.toUpperCase() || 'U'}
+                              </span>
                             </div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {user.isOnline ? 'Online' : 'Offline'}
-                              {user.lastSeen && !user.isOnline && (
-                                <span className="ml-2">
-                                  Last seen: {new Date(user.lastSeen).toLocaleTimeString()}
-                                </span>
-                              )}
-                            </p>
-                          </div>
+                          )}
+                          <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-card ${
+                            user.isOnline ? 'bg-success' : 'bg-muted-foreground'
+                          }`} />
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium">{formatMinutes(user.totalActiveMinutes)}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {selectedDate.toDateString() === new Date().toDateString() 
-                              ? `Today: ${formatMinutes(user.todayActiveMinutes)}`
-                              : `${selectedDate.toLocaleDateString()}: ${formatMinutes(user.todayActiveMinutes)}`
-                            }
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <h4 className="font-medium text-foreground">{user.name || 'Unknown User'}</h4>
+                            {formatUserLocalTime(user.timezone) && (
+                              <span className="text-xs font-mono bg-accent text-accent-foreground px-2 py-1 rounded">
+                                {formatUserLocalTime(user.timezone)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {user.isOnline ? 'Currently online' : 'Offline'}
                           </p>
                         </div>
                       </div>
-                      
-                      {/* Timeline visualization */}
-                      <div className="space-y-2">
-                        <UserTimeline 
-                          userId={user.id}
-                          workdays={timelineData?.get(user.id)}
-                        />
+                      <div className="text-right">
+                        <div className="text-2xl font-semibold text-foreground">{formatMinutes(user.totalActiveMinutes)}</div>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedDate.toDateString() === new Date().toDateString() 
+                            ? `Today: ${formatMinutes(user.todayActiveMinutes)}`
+                            : `${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${formatMinutes(user.todayActiveMinutes)}`
+                          }
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    
+                    <UserTimeline 
+                      userId={user.id}
+                      workdays={timelineData?.get(user.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
         </div>
       </div>
 
       {/* Custom Tooltip */}
       {hoveredUser && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed z-50 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none"
+          className="fixed z-50 bg-card border border-border text-card-foreground text-xs px-3 py-2 rounded-lg shadow-lg pointer-events-none animate-fade-in"
           style={{
             left: hoveredUser.x,
             top: hoveredUser.y,

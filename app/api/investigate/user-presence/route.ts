@@ -77,7 +77,7 @@ export async function GET(request: Request) {
         if (log.metadata) {
           parsedMetadata = JSON.parse(log.metadata)
         }
-      } catch (e) {
+      } catch {
         // Ignore parsing errors
       }
       

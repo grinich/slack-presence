@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, memo, useEffect } from 'react'
+import { useState, useMemo, memo, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
@@ -42,6 +42,24 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
   } | null>(null)
   
   const [currentTime, setCurrentTime] = useState(new Date())
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Debounced hover handlers
+  const handleSlotHover = useCallback((slot: TimelineData, user: UserTodayData, x: number, y: number) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredSlot({ slot, user, x, y })
+    }, 100)
+  }, [])
+
+  const handleSlotHoverLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    setHoveredSlot(null)
+  }, [])
 
   // Update current time every minute
   useEffect(() => {
@@ -71,22 +89,23 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     }
   }, [])
 
-  const getStatusColor = (status: string, onlinePercentage: number) => {
+  // Memoize expensive functions
+  const getStatusColor = useCallback((status: string, _onlinePercentage: number) => {
     switch (status) {
       case 'online':
-        return 'bg-[lab(62.79_-40.35_11.7)]'  // Custom LAB green
+        return 'bg-success'
       case 'offline':
-        return 'bg-gray-200'     // Slightly lighter gray for offline/away
+        return 'bg-border'
       case 'no-data':
       default:
-        return 'bg-gray-100'     // Softer light gray for no data
+        return 'bg-muted'
     }
-  }
+  }, [])
 
-  const getStatusOpacity = (status: string) => {
+  const getStatusOpacity = useCallback((_status: string) => {
     // Always full opacity - no fading based on percentage
     return 'opacity-100'
-  }
+  }, [])
 
   const formatTime = (hour: number, quarter: number) => {
     const ampm = hour >= 12 ? 'PM' : 'AM'
@@ -143,13 +162,12 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
   }
 
   // Calculate current time position for the shared vertical indicator
-  const getCurrentTimePosition = () => {
+  const currentTimePosition = useMemo(() => {
     const currentHour = currentTime.getHours()
     const currentMinute = currentTime.getMinutes()
     
     // Timeline shows full 24 hours (0-23)
     const visibleStartHour = 0
-    const visibleEndHour = 23
     const totalVisibleHours = 24 // Full day
     
     // Calculate current position within visible hours
@@ -160,12 +178,8 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     // Calculate percentage position within the visible timeline
     const position = (minutesFromStart / totalVisibleMinutes) * 100
     
-    // Current time position calculated
-    
     return position
-  }
-
-  const currentTimePosition = useMemo(() => getCurrentTimePosition(), [])
+  }, [currentTime])
 
   // Memoize expensive filtering and sorting operations
   const sortedUsers = useMemo(() => {
@@ -184,26 +198,26 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
   return (
     <div className={cn("space-y-3", className)}>
       {/* Legend */}
-      <div className="flex items-center space-x-3 text-xs text-gray-600 pb-2">
-        <div className="flex items-center space-x-1">
-          <div className="w-2 h-2 bg-[lab(62.79_-40.35_11.7)] rounded-sm" />
+      <div className="flex items-center gap-6 text-xs text-muted-foreground pb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-success rounded" />
           <span>Online</span>
         </div>
-        <div className="flex items-center space-x-1">
-          <div className="w-2 h-2 bg-gray-200 rounded-sm" />
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-border rounded" />
           <span>Away</span>
         </div>
-        <div className="flex items-center space-x-1">
-          <div className="w-2 h-2 bg-gray-100 rounded-sm" />
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-muted rounded" />
           <span>No Data</span>
         </div>
       </div>
 
       {/* Header with time labels */}
-      <div className="flex items-center space-x-2">
-        <div className="w-20 flex-shrink-0" /> {/* Space for names */}
-        <div className="w-12 flex-shrink-0" /> {/* Space for timezone */}
-        <div className="flex justify-between text-xs text-gray-500 flex-1">
+      <div className="flex items-center gap-3 pb-2">
+        <div className="w-24 flex-shrink-0" />
+        <div className="w-12 flex-shrink-0" />
+        <div className="flex justify-between text-xs text-muted-foreground flex-1 font-mono">
           <span>12AM</span>
           <span>4AM</span>
           <span>8AM</span>
@@ -212,24 +226,24 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
           <span>8PM</span>
           <span>11:59PM</span>
         </div>
-        <div className="w-12 text-xs text-gray-500 font-medium text-right flex-shrink-0">
-          Hours
+        <div className="w-16 text-xs text-muted-foreground font-medium text-right flex-shrink-0">
+          Active
         </div>
       </div>
 
       {/* User timeline rows */}
-      <div className="relative" style={{gap: '2px', display: 'flex', flexDirection: 'column'}}>
+      <div className="space-y-1">
         {sortedUsers.map((user) => {
           const timezoneInfo = getTimezoneInfo(user.timezone)
           return (
-            <div key={user.id} className="flex items-center space-x-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150 rounded px-1 group">
+            <div key={user.id} className="flex items-center gap-3 hover:bg-accent/30 transition-all duration-200 rounded-lg px-2 py-1 group">
               {/* User name */}
-              <div className="w-20 flex-shrink-0 text-xs text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 font-medium text-right pr-2 transition-colors duration-150">
+              <div className="w-24 flex-shrink-0 text-sm font-medium text-card-foreground group-hover:text-foreground text-right transition-colors">
                 {formatNameAsFirstName(user.name)}
               </div>
               
               {/* Timezone offset */}
-              <div className="w-12 flex-shrink-0 text-xs text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 font-mono text-center transition-colors duration-150">
+              <div className="w-12 flex-shrink-0 text-xs text-muted-foreground font-mono text-center">
                 {timezoneInfo.display}
               </div>
             
@@ -238,36 +252,20 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
               {(() => {
                 const visibleSlots = user.timeline // Show full 24 hours
                 return visibleSlots.map((slot) => {
-                  const startTime = formatTime(slot.hour, slot.quarter)
-                  
-                  // Calculate end time (15 minutes later)
-                  let endHour = slot.hour
-                  let endMinutes = (slot.quarter + 1) * 15
-                  if (endMinutes >= 60) {
-                    endHour += 1
-                    endMinutes = 0
-                  }
-                  const endQuarter = Math.floor(endMinutes / 15)
-                  const endTime = formatTime(endHour, endQuarter)
                   
                   return (
                     <div
                       key={slot.blockIndex}
                       className={cn(
-                        "h-4 cursor-pointer transition-all hover:scale-110 flex-1 min-w-0 relative",
+                        "h-5 cursor-pointer transition-all hover:scale-105 hover:ring-1 hover:ring-ring/50 flex-1 min-w-0 rounded-sm",
                         getStatusColor(slot.status, slot.onlinePercentage),
                         getStatusOpacity(slot.status)
                       )}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
-                        setHoveredSlot({
-                          slot,
-                          user,
-                          x: rect.left + rect.width / 2,
-                          y: rect.top - 40
-                        })
+                        handleSlotHover(slot, user, rect.left + rect.width / 2, rect.top - 40)
                       }}
-                      onMouseLeave={() => setHoveredSlot(null)}
+                      onMouseLeave={handleSlotHoverLeave}
                     />
                   )
                 })
@@ -275,9 +273,9 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             </div>
             
             {/* Daily total time */}
-            <div className="w-12 text-xs text-gray-600 group-hover:text-gray-800 dark:group-hover:text-gray-200 font-medium text-right flex-shrink-0 transition-colors duration-150">
+            <div className="w-16 text-sm text-muted-foreground group-hover:text-foreground font-medium text-right flex-shrink-0 transition-colors">
               {formatMinutes(user.totalActiveMinutes)}
-              </div>
+            </div>
             </div>
           )
         })}
@@ -285,17 +283,17 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
         {/* Shared vertical current time indicator that spans all rows */}
         {currentTimePosition !== null && (
           <div
-            className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
+            className="absolute top-0 bottom-0 w-0.5 bg-destructive z-10 pointer-events-none rounded-full"
             style={{
-              left: `calc(9rem + (100% - 12.5rem) * ${currentTimePosition / 100})`, 
-              // 9rem = name(5rem) + gap(0.5rem) + timezone(3rem) + gap(0.5rem)
-              // 12.5rem = total fixed width including hours column(3rem) and final gap(0.5rem)  
-              // (100% - 12.5rem) = actual timeline area width
+              left: `calc(10rem + (100% - 14rem) * ${currentTimePosition / 100})`, 
+              // 10rem = name(6rem) + gap(0.75rem) + timezone(3rem) + gap(0.75rem)
+              // 14rem = total fixed width including hours column(4rem) and final gap(0.75rem)  
+              // (100% - 14rem) = actual timeline area width
               // currentTimePosition/100 = percentage as decimal within timeline area
             }}
           >
             {/* Current time display */}
-            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-lg whitespace-nowrap border border-red-100">
+            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-medium text-destructive-foreground bg-destructive px-2 py-1 rounded-md whitespace-nowrap shadow-sm">
               {currentTime.toLocaleTimeString('en-US', { 
                 hour: 'numeric', 
                 minute: '2-digit',
@@ -303,9 +301,9 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
               })}
             </div>
             {/* Top indicator */}
-            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-red-400 rounded-full" />
+            <div className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
             {/* Bottom indicator */}
-            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-red-400 rounded-full" />
+            <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
           </div>
         )}
       </div>
@@ -313,7 +311,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
       {/* Custom tooltip */}
       {hoveredSlot && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed z-50 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none"
+          className="fixed z-50 bg-card border border-border text-card-foreground text-xs px-3 py-2 rounded-lg shadow-lg pointer-events-none animate-fade-in"
           style={{
             left: hoveredSlot.x,
             top: hoveredSlot.y,
@@ -331,7 +329,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             const endQuarter = Math.floor(endMinutes / 15)
             const endTime = formatTime(endHour, endQuarter)
             
-            return `${formatNameAsFirstName(hoveredSlot.user.name)} ${startTime} - ${endTime} (${hoveredSlot.slot.activeMinutes}/15 minutes)${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
+            return `${formatNameAsFirstName(hoveredSlot.user.name)} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
           })()}
         </div>,
         document.body

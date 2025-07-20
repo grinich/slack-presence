@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +32,7 @@ interface UserTimelineProps {
   workdays?: WorkdayData[] // Pre-fetched workdays data
 }
 
-export default function UserTimeline({ userId, className, workdays: preFetchedWorkdays }: UserTimelineProps) {
+function UserTimeline({ userId, className, workdays: preFetchedWorkdays }: UserTimelineProps) {
   const [workdays, setWorkdays] = useState<WorkdayData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +44,49 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
   } | null>(null)
   
   const [currentTime, setCurrentTime] = useState(new Date())
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Debounced hover handlers
+  const handleSlotHover = useCallback((slot: TimelineData, workday: WorkdayData, x: number, y: number) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredSlot({ slot, workday, x, y })
+    }, 100)
+  }, [])
+
+  const handleSlotHoverLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    setHoveredSlot(null)
+  }, [])
+
+  // Memoized helper functions
+  const getStatusColor = useCallback((_status: string, _onlinePercentage: number) => {
+    switch (_status) {
+      case 'online':
+        return 'bg-success'
+      case 'offline':
+        return 'bg-border'
+      case 'no-data':
+      default:
+        return 'bg-muted'
+    }
+  }, [])
+
+  const getStatusOpacity = useCallback((_status: string) => {
+    // Always full opacity - no fading based on percentage
+    return 'opacity-100'
+  }, [])
+
+  const formatTime = useCallback((hour: number, quarter: number) => {
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+    const minutes = quarter * 15
+    return `${displayHour}:${minutes.toString().padStart(2, '0')}${ampm}`
+  }, [])
 
   // Update current time every minute
   useEffect(() => {
@@ -93,7 +136,7 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
         } else {
           setError(result.error || 'Failed to fetch timeline')
         }
-      } catch (err) {
+      } catch {
         setError('Network error')
       } finally {
         setLoading(false)
@@ -151,31 +194,6 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
         Failed to load timeline
       </div>
     )
-  }
-
-
-  const getStatusColor = (status: string, onlinePercentage: number) => {
-    switch (status) {
-      case 'online':
-        return 'bg-[lab(62.79_-40.35_11.7)]'  // Custom LAB green
-      case 'offline':
-        return 'bg-gray-200'     // Slightly lighter gray for offline/away
-      case 'no-data':
-      default:
-        return 'bg-gray-100'     // Softer light gray for no data
-    }
-  }
-
-  const getStatusOpacity = (status: string) => {
-    // Always full opacity - no fading based on percentage
-    return 'opacity-100'
-  }
-
-  const formatTime = (hour: number, quarter: number) => {
-    const ampm = hour >= 12 ? 'PM' : 'AM'
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-    const minutes = quarter * 15
-    return `${displayHour}:${minutes.toString().padStart(2, '0')}${ampm}`
   }
 
   const isCurrentTimeSlot = (date: string, hour: number, quarter: number) => {
@@ -248,11 +266,8 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
           
           // Format date as "Mon 7/12" - parse as local date to avoid timezone issues
           const dateParts = workday.date.split('-')
-          const year = parseInt(dateParts[0])
           const month = parseInt(dateParts[1])
           const day = parseInt(dateParts[2])
-          const date = new Date(year, month - 1, day) // month is 0-indexed in Date constructor
-          const dayLabel = `${workday.dayShort} ${month}/${day}`
           
           return (
             <div key={workday.date} className="flex items-center space-x-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150 rounded px-1 group">
@@ -271,20 +286,6 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
                 {workday.timeline
                   // Show full 24 hours
                   .map((slot) => {
-                  const isCurrentTime = isCurrentTimeSlot(workday.date, slot.hour, slot.quarter)
-                  const startTime = formatTime(slot.hour, slot.quarter)
-                  
-                  // Calculate end time (15 minutes later)
-                  let endHour = slot.hour
-                  let endMinutes = (slot.quarter + 1) * 15
-                  if (endMinutes >= 60) {
-                    endHour += 1
-                    endMinutes = 0
-                  }
-                  const endQuarter = Math.floor(endMinutes / 15)
-                  const endTime = formatTime(endHour, endQuarter)
-                  
-                  const tooltipText = `${workday.dayShort} ${startTime} - ${endTime}: ${slot.onlinePercentage}% active (${slot.activeMinutes}/15 minutes)${slot.hasMessages ? ` • ${slot.messageCount} messages` : ''}${isCurrentTime ? ' • CURRENT TIME' : ''}`
                   
                   
                   return (
@@ -297,14 +298,9 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
                       )}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect()
-                        setHoveredSlot({
-                          slot,
-                          workday,
-                          x: rect.left + rect.width / 2,
-                          y: rect.top - 40
-                        })
+                        handleSlotHover(slot, workday, rect.left + rect.width / 2, rect.top - 40)
                       }}
-                      onMouseLeave={() => setHoveredSlot(null)}
+                      onMouseLeave={handleSlotHoverLeave}
                     />
                   )
                 })}
@@ -343,7 +339,6 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
           
           // Timeline shows full 24 hours (0-23)
           const visibleStartHour = 0
-          const visibleEndHour = 23
           const totalVisibleHours = 24 // Full day
           
           // Calculate current position within visible hours
@@ -372,21 +367,6 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
         })()}
       </div>
       
-      {/* Legend */}
-      <div className="flex items-center space-x-3 text-xs text-gray-600 pb-2">
-        <div className="flex items-center space-x-1">
-          <div className="w-2 h-2 bg-[lab(62.79_-40.35_11.7)] rounded-sm" />
-          <span>Online</span>
-        </div>
-        <div className="flex items-center space-x-1">
-          <div className="w-2 h-2 bg-gray-200 rounded-sm" />
-          <span>Away</span>
-        </div>
-        <div className="flex items-center space-x-1">
-          <div className="w-2 h-2 bg-gray-100 rounded-sm" />
-          <span>No Data</span>
-        </div>
-      </div>
 
       {/* Custom tooltip rendered via portal to avoid layout shifts */}
       {hoveredSlot && typeof document !== 'undefined' && createPortal(
@@ -410,7 +390,7 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
             const endTime = formatTime(endHour, endQuarter)
             const isCurrentTime = isCurrentTimeSlot(hoveredSlot.workday.date, hoveredSlot.slot.hour, hoveredSlot.slot.quarter)
             
-            return `${hoveredSlot.workday.dayShort} ${startTime} - ${endTime} (${hoveredSlot.slot.activeMinutes}/15 minutes)${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}${isCurrentTime ? ' • CURRENT TIME' : ''}`
+            return `${hoveredSlot.workday.dayShort} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}${isCurrentTime ? ' • CURRENT TIME' : ''}`
           })()}
         </div>,
         document.body
@@ -418,3 +398,5 @@ export default function UserTimeline({ userId, className, workdays: preFetchedWo
     </div>
   )
 }
+
+export default memo(UserTimeline)
