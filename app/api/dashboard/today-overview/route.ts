@@ -60,12 +60,15 @@ export async function GET(request: Request) {
     
     // Process each user's timeline data for today
     const userTodayData = users.map(user => {
-      // Check if user has been active in the last 15 minutes
+      // Check if user is currently online based on most recent presence status
       const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000)
-      const recentActiveLogs = user.presenceLogs.filter(log => 
-        log.timestamp >= fifteenMinutesAgo && log.status === 'active'
+      const recentLogs = user.presenceLogs.filter(log => 
+        log.timestamp >= fifteenMinutesAgo
       )
-      const isCurrentlyOnline = recentActiveLogs.length > 0
+      
+      // Get the most recent presence log within 15 minutes
+      const mostRecentLog = recentLogs.length > 0 ? recentLogs[recentLogs.length - 1] : null
+      const isCurrentlyOnline = mostRecentLog?.status === 'active'
       
       // Find the most recent active presence log for "last seen" tooltip
       const allActiveLogs = user.presenceLogs.filter(log => log.status === 'active')
