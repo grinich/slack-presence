@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/collect-presence",
-      "schedule": "* * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/sync-all-users",
