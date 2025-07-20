@@ -200,7 +200,77 @@ export default function AuthenticatedDashboard() {
         clearInterval(refreshInterval)
       }
     }
-  }, [status, lastRefresh, router, selectedDate])
+  }, [status, lastRefresh, router])
+
+  // Separate effect for handling date changes - force refresh immediately
+  useEffect(() => {
+    if (status === 'authenticated') {
+      async function fetchDataForNewDate() {
+        try {
+          setIsRefreshing(true)
+          setLastRefresh(Date.now())
+          
+          // Calculate selected date in user's local timezone and convert to UTC for server
+          const userDateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+          const userDateEnd = new Date(userDateStart)
+          userDateEnd.setDate(userDateEnd.getDate() + 1)
+          userDateEnd.setMilliseconds(-1) // End of day
+          
+          // Fetch selected date's overview with timezone-aware date range
+          const [todayResponse] = await Promise.all([
+            fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
+          ])
+          
+          const [todayResult] = await Promise.all([
+            todayResponse.json()
+          ])
+          
+          if (todayResult.success) {
+            // Transform UserTodayData to UserStats format
+            const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
+              id: user.id,
+              name: user.name,
+              avatarUrl: user.avatarUrl,
+              timezone: user.timezone,
+              totalActiveMinutes: user.totalActiveMinutes,
+              todayActiveMinutes: user.totalActiveMinutes,
+              lastSeen: null, // Not available in current API
+              isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
+            }))
+            
+            setData(transformedData)
+            setTodayData(todayResult.data)
+            
+            // Extract user IDs and fetch timeline data in batch
+            const userIds = todayResult.data.map((user: UserTodayData) => user.id)
+            
+            if (userIds.length > 0) {
+              const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
+              const timelineResult = await timelineResponse.json()
+              
+              if (timelineResult.success) {
+                // Convert array to map for easier lookup
+                const timelineMap = new Map()
+                timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
+                  timelineMap.set(userTimeline.userId, userTimeline.workdays)
+                })
+                setTimelineData(timelineMap)
+              }
+            }
+          } else {
+            setError(todayResult.error || 'Failed to fetch data')
+          }
+        } catch {
+          setError('Network error')
+        } finally {
+          setLoading(false)
+          setIsRefreshing(false)
+        }
+      }
+
+      fetchDataForNewDate()
+    }
+  }, [selectedDate, status])
 
 
 
