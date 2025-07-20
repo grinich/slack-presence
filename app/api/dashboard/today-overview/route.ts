@@ -66,6 +66,12 @@ export async function GET(request: Request) {
         log.timestamp >= fifteenMinutesAgo && log.status === 'active'
       )
       const isCurrentlyOnline = recentActiveLogs.length > 0
+      
+      // Find the most recent active presence log for "last seen" tooltip
+      const allActiveLogs = user.presenceLogs.filter(log => log.status === 'active')
+      const lastActiveTime = allActiveLogs.length > 0 
+        ? allActiveLogs[allActiveLogs.length - 1].timestamp 
+        : null
       // Create timeline blocks for 24 hours (96 15-minute blocks)
       const timeline = []
       
@@ -140,7 +146,8 @@ export async function GET(request: Request) {
         timeline,
         totalActiveMinutes,
         messageCount: totalMessageCount,
-        isCurrentlyOnline
+        isCurrentlyOnline,
+        lastActiveTime: lastActiveTime?.toISOString() || null
       }
     })
     

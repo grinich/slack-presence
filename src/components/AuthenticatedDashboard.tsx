@@ -62,6 +62,7 @@ interface UserTodayData {
   totalActiveMinutes: number
   messageCount: number
   isCurrentlyOnline: boolean
+  lastActiveTime: string | null
 }
 
 
@@ -300,6 +301,28 @@ export default function AuthenticatedDashboard() {
     }
   }
 
+  const formatLastSeen = (lastActiveTime: string | null) => {
+    if (!lastActiveTime) return 'Never seen active'
+    
+    const lastActive = new Date(lastActiveTime)
+    const now = new Date()
+    const diffMs = now.getTime() - lastActive.getTime()
+    const diffMinutes = Math.floor(diffMs / (1000 * 60))
+    
+    if (diffMinutes < 1) {
+      return 'Active now'
+    } else if (diffMinutes < 60) {
+      return `Last seen ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`
+    } else {
+      const diffHours = Math.floor(diffMinutes / 60)
+      if (diffHours < 24) {
+        return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+      } else {
+        return `Last seen ${lastActive.toLocaleDateString()} at ${lastActive.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
@@ -333,13 +356,17 @@ export default function AuthenticatedDashboard() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center space-x-2 text-sm">
                   <Users className="h-4 w-4" />
-                  <span>Currently Online ({data.filter(user => user.isOnline).length})</span>
+                  <span>Currently Online ({todayData?.filter(user => user.isCurrentlyOnline).length || 0})</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex flex-wrap gap-2">
-                  {data.filter(user => user.isOnline).map((user) => (
-                    <div key={user.id} className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1">
+                  {todayData?.filter(user => user.isCurrentlyOnline).map((user) => (
+                    <div 
+                      key={user.id} 
+                      className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1 cursor-help"
+                      title={formatLastSeen(user.lastActiveTime)}
+                    >
                       <div className="relative">
                         {user.avatarUrl ? (
                           <img
@@ -360,8 +387,8 @@ export default function AuthenticatedDashboard() {
                         {formatNameAsFirstName(user.name)}
                       </span>
                     </div>
-                  ))}
-                  {data.filter(user => user.isOnline).length === 0 && (
+                  )) || []}
+                  {(todayData?.filter(user => user.isCurrentlyOnline).length || 0) === 0 && (
                     <span className="text-sm text-gray-500 dark:text-gray-400">No team members currently online</span>
                   )}
                 </div>
