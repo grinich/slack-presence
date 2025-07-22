@@ -142,6 +142,15 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     return `@${slackUserId.substring(1, 8).toLowerCase()}`
   }
 
+  const formatNameAsFirstNameLastInitial = (name: string | null) => {
+    if (!name) return 'Unknown'
+    const parts = name.trim().split(' ')
+    if (parts.length === 1) return parts[0]
+    const firstName = parts[0]
+    const lastInitial = parts[parts.length - 1][0]?.toUpperCase()
+    return lastInitial ? `${firstName} ${lastInitial}.` : firstName
+  }
+
   const getTimezoneInfo = (timezone: string | null) => {
     if (!timezone) return { display: '', offsetMinutes: 0 }
     
@@ -255,9 +264,9 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             const timezoneInfo = getTimezoneInfo(user.timezone)
             return (
               <div key={user.id} className="flex items-center gap-3 hover:bg-accent/30 transition-all duration-200 rounded-lg px-2 py-1 group">
-                {/* User Slack handle */}
+                {/* User name */}
                 <div className="w-24 flex-shrink-0 text-sm font-medium text-card-foreground group-hover:text-foreground text-right transition-colors">
-                  {formatAsSlackHandle(user.slackUserId, user.name)}
+                  {formatNameAsFirstNameLastInitial(user.name)}
                 </div>
                 
                 {/* Timezone offset */}
@@ -338,7 +347,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             const endQuarter = Math.floor(endMinutes / 15)
             const endTime = formatTime(endHour, endQuarter)
             
-            return `${formatAsSlackHandle(hoveredSlot.user.slackUserId, hoveredSlot.user.name)} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
+            return `${formatNameAsFirstNameLastInitial(hoveredSlot.user.name)} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
           })()}
         </div>,
         document.body

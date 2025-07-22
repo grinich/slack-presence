@@ -17,13 +17,22 @@ export default function StartupInit() {
         })
         
         if (!syncResponse.ok) {
-          console.error('User sync failed:', syncResponse.status)
-          setInitStatus('User sync failed')
-          return
+          const errorData = await syncResponse.json()
+          
+          // Handle rate limiting gracefully
+          if (syncResponse.status === 429 && errorData.graceful) {
+            console.warn('User sync rate limited - continuing with existing data')
+            setInitStatus('Rate limited - using cached data...')
+            // Don't return, continue to presence collection
+          } else {
+            console.error('User sync failed:', syncResponse.status, errorData)
+            setInitStatus('User sync failed - using cached data')
+            return
+          }
+        } else {
+          const syncResult = await syncResponse.json()
+          console.log('User sync completed:', syncResult)
         }
-        
-        const syncResult = await syncResponse.json()
-        console.log('User sync completed:', syncResult)
         
         setInitStatus('Collecting initial presence data...')
         
@@ -33,8 +42,11 @@ export default function StartupInit() {
         })
         
         if (!presenceResponse.ok) {
-          console.error('Presence collection failed:', presenceResponse.status)
-          setInitStatus('Presence collection failed')
+          const presenceErrorData = await presenceResponse.json()
+          console.error('Presence collection failed:', presenceResponse.status, presenceErrorData)
+          setInitStatus('Presence collection failed - app ready')
+          // Still show as completed since the app can function without initial presence data
+          setTimeout(() => setInitStatus('App ready (limited data)'), 1000)
           return
         }
         
@@ -43,14 +55,22 @@ export default function StartupInit() {
         
         setInitStatus('Initialization completed')
         
+        // Hide the status after a few seconds
+        setTimeout(() => setInitStatus(''), 3000)
+        
       } catch (error) {
         console.error('Initialization error:', error)
-        setInitStatus('Initialization error')
+        setInitStatus('Network error - app ready with cached data')
+        // Still allow the app to function
+        setTimeout(() => setInitStatus(''), 3000)
       }
     }
     
     initialize()
   }, [])
+
+  // Don't render anything if status is empty
+  if (!initStatus) return null
 
   return (
     <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded shadow z-50">

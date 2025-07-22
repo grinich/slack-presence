@@ -88,18 +88,28 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${usersData.members.length} team members`)
 
-    const results = []
-    for (const member of usersData.members) {
-      // Skip deleted users, bots (except our app), system users, and inactive accounts
-      if (member.deleted || 
+    // Filter active users first to reduce noise in logs
+    const activeMembers = usersData.members.filter(member => {
+      const shouldSkip = member.deleted || 
           member.is_restricted || 
           member.is_ultra_restricted ||
           (member.is_bot && member.name !== 'team analytics') || 
-          member.id === 'USLACKBOT') {
-        console.log(`Skipping inactive user: ${member.name || member.id} (deleted: ${member.deleted}, restricted: ${member.is_restricted}, ultra_restricted: ${member.is_ultra_restricted}, bot: ${member.is_bot})`)
-        continue
-      }
+          member.id === 'USLACKBOT'
+      
+      return !shouldSkip
+    })
 
+    console.log(`Processing ${activeMembers.length} active users (skipped ${usersData.members.length - activeMembers.length} inactive users)`)
+
+    // Process users in batches to avoid overwhelming the database connection pool
+    const batchSize = 5
+    const results = []
+    
+    for (let i = 0; i < activeMembers.length; i += batchSize) {
+      const batch = activeMembers.slice(i, i + batchSize)
+      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(activeMembers.length / batchSize)}`)
+      
+      const batchPromises = batch.map(async (member) => {
       try {
         // Check if user exists in our database
         const existingUser = await prisma.user.findUnique({
@@ -140,28 +150,31 @@ export async function GET(request: NextRequest) {
               metadata: userData.metadata
             }
           })
-          results.push({ userId: existingUser.id, action: 'updated', name: userData.name, timezone: userData.timezone })
+          console.log(`Updated user: ${userData.name} (${userData.timezone || 'no timezone'})`)
+          return { userId: existingUser.id, action: 'updated', name: userData.name, timezone: userData.timezone }
         } else {
           // Create new user (without access token - they'll need to sign in to get presence monitoring)
           const newUser = await prisma.user.create({
             data: userData
           })
-          results.push({ userId: newUser.id, action: 'created', name: userData.name, timezone: userData.timezone })
+          console.log(`Created user: ${userData.name} (${userData.timezone || 'no timezone'})`)
+          return { userId: newUser.id, action: 'created', name: userData.name, timezone: userData.timezone }
         }
 
-        console.log(`${existingUser ? 'Updated' : 'Created'} user: ${userData.name} (${userData.timezone || 'no timezone'})`)
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          console.error(`Error processing user ${member.name} (${member.id}):`, error)
+          return { userId: member.id, action: 'error', error: errorMessage }
+        }
+      })
 
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`Error processing user ${member.name} (${member.id}):`, error)
-        results.push({ userId: member.id, action: 'error', error: errorMessage })
-      }
+      // Wait for this batch to complete before moving to the next
+      const batchResults = await Promise.all(batchPromises)
+      results.push(...batchResults)
     }
 
     // Clean up users who are no longer in the Slack workspace
-    const activeSlackUserIds = usersData.members
-      .filter((member: SlackMember) => !member.deleted && !member.is_restricted && !member.is_ultra_restricted && !member.is_bot)
-      .map((member: SlackMember) => member.id)
+    const activeSlackUserIds = activeMembers.map(member => member.id)
     
     const inactiveUsers = await prisma.user.findMany({
       where: {
@@ -170,8 +183,8 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Mark inactive users (don't delete, in case they come back)
-    for (const inactiveUser of inactiveUsers) {
+    // Mark inactive users in parallel (don't delete, in case they come back)
+    const inactiveUserPromises = inactiveUsers.map(async (inactiveUser) => {
       await prisma.user.update({
         where: { id: inactiveUser.id },
         data: {
@@ -183,6 +196,10 @@ export async function GET(request: NextRequest) {
         }
       })
       console.log(`Marked user as inactive: ${inactiveUser.name} (${inactiveUser.slackUserId})`)
+    })
+
+    if (inactiveUserPromises.length > 0) {
+      await Promise.all(inactiveUserPromises)
     }
 
     const created = results.filter(r => r.action === 'created').length

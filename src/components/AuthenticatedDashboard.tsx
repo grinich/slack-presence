@@ -313,10 +313,13 @@ export default function AuthenticatedDashboard() {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
   }
 
-  const formatNameAsFirstName = (name: string | null) => {
+  const formatNameAsFirstNameLastInitial = (name: string | null) => {
     if (!name) return 'Unknown'
     const parts = name.trim().split(' ')
-    return parts[0]
+    if (parts.length === 1) return parts[0]
+    const firstName = parts[0]
+    const lastInitial = parts[parts.length - 1][0]?.toUpperCase()
+    return lastInitial ? `${firstName} ${lastInitial}.` : firstName
   }
 
   const formatUserLocalTime = (timezone: string | null) => {
@@ -442,7 +445,7 @@ export default function AuthenticatedDashboard() {
                       <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card bg-success" />
                     </div>
                     <span className="text-sm font-medium text-card-foreground group-hover:text-foreground transition-colors">
-                      {formatNameAsFirstName(user.name)}
+                      {formatNameAsFirstNameLastInitial(user.name)}
                     </span>
                   </div>
                 ))}
