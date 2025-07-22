@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       todayEnd = endOfDay(now)
     }
     
-    // Get all active users with their presence data for today (optimized)
+    // Get active users first (without presence data to avoid large joins)
     const users = await prisma.user.findMany({
       where: {
         // Exclude users marked as inactive
@@ -39,29 +39,46 @@ export async function GET(request: Request) {
         name: true,
         avatarUrl: true,
         timezone: true,
-        presenceLogs: {
-          where: {
-            timestamp: {
-              gte: todayStart,
-              lte: todayEnd,
-            },
-          },
-          select: {
-            status: true,
-            timestamp: true,
-          },
-          orderBy: {
-            timestamp: 'asc',
-          },
+        slackUserId: true,
+      },
+    })
+
+    // Batch fetch presence logs for all users in one query
+    const userIds = users.map(u => u.id)
+    const allPresenceLogs = await prisma.presenceLog.findMany({
+      where: {
+        userId: { in: userIds },
+        timestamp: {
+          gte: todayStart,
+          lte: todayEnd,
         },
       },
+      select: {
+        userId: true,
+        status: true,
+        timestamp: true,
+      },
+      orderBy: {
+        timestamp: 'asc',
+      },
+    })
+
+    // Group presence logs by userId for efficient lookup
+    const presenceLogsByUser = new Map<string, typeof allPresenceLogs>()
+    allPresenceLogs.forEach(log => {
+      if (!presenceLogsByUser.has(log.userId)) {
+        presenceLogsByUser.set(log.userId, [])
+      }
+      presenceLogsByUser.get(log.userId)!.push(log)
     })
     
     // Process each user's timeline data for today
     const userTodayData = users.map(user => {
+      const userPresenceLogs = presenceLogsByUser.get(user.id) || []
+      
       // Check if user is currently online based on most recent presence status
       const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000)
-      const recentLogs = user.presenceLogs.filter(log => 
+      const recentLogs = userPresenceLogs.filter(log => 
         log.timestamp >= fifteenMinutesAgo
       )
       
@@ -70,7 +87,7 @@ export async function GET(request: Request) {
       const isCurrentlyOnline = mostRecentLog?.status === 'active'
       
       // Find the most recent active presence log for "last seen" tooltip
-      const allActiveLogs = user.presenceLogs.filter(log => log.status === 'active')
+      const allActiveLogs = userPresenceLogs.filter(log => log.status === 'active')
       const lastActiveTime = allActiveLogs.length > 0 
         ? allActiveLogs[allActiveLogs.length - 1].timestamp 
         : null
@@ -87,7 +104,7 @@ export async function GET(request: Request) {
           const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
           
           // Find presence logs within this 15-minute block
-          const blockLogs = user.presenceLogs.filter(log => 
+          const blockLogs = userPresenceLogs.filter(log => 
             log.timestamp >= blockStart && log.timestamp < blockEnd
           )
           
@@ -145,6 +162,7 @@ export async function GET(request: Request) {
         name: user.name,
         avatarUrl: user.avatarUrl,
         timezone: user.timezone,
+        slackUserId: user.slackUserId,
         timeline,
         totalActiveMinutes,
         messageCount: totalMessageCount,

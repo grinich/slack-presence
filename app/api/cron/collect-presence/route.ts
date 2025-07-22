@@ -55,11 +55,9 @@ export async function GET(request: NextRequest) {
     })
     console.log(`Found ${users.length} users to monitor`)
 
-    const results = []
-    for (const user of users) {
+    // First, fetch all presence data from Slack API without holding DB connections
+    const presencePromises = users.map(async (user) => {
       try {
-        // Get user's presence from Slack API using bot/admin token
-        // Note: This may return cached data - consider implementing RTM API for real-time updates
         const presenceResponse = await fetch('https://slack.com/api/users.getPresence', {
           method: 'POST',
           headers: {
@@ -72,65 +70,72 @@ export async function GET(request: NextRequest) {
         })
 
         const presenceData = await presenceResponse.json()
-
-        if (presenceData.ok) {
-          // Simple presence logic - just use the presence field directly
-          const actualStatus = presenceData.presence === 'active' ? 'active' : 'away'
-          
-          console.log(`🟢 Presence check for ${user.name || user.slackUserId}: ${JSON.stringify({
-            presence: presenceData.presence,
-            online: presenceData.online,
-            auto_away: presenceData.auto_away,
-            manual_away: presenceData.manual_away,
-            connection_count: presenceData.connection_count,
-            last_activity: presenceData.last_activity,
-            actualStatus
-          })}`)
-          
-          // Store presence data
-          await prisma.presenceLog.create({
-            data: {
-              userId: user.id,
-              status: actualStatus,
-              timestamp: new Date(),
-              metadata: JSON.stringify({
-                online: presenceData.online ?? null,
-                auto_away: presenceData.auto_away ?? null,
-                manual_away: presenceData.manual_away ?? null,
-                connection_count: presenceData.connection_count ?? null,
-                last_activity: presenceData.last_activity ?? null,
-                raw_presence: presenceData.presence ?? null,
-                // Store the complete raw response for debugging
-                full_response: presenceData
-              })
-            }
-          })
-
-          // User info updates are now handled by the hourly sync-all-users job
-
-          results.push({
-            userId: user.id,
-            status: presenceData.presence,
-            success: true
-          })
-        } else {
-          console.error(`Failed to get presence for user ${user.id} (${user.name || user.slackUserId}): Slack API error - ${presenceData.error} (HTTP ${presenceResponse.status}). Response: ${JSON.stringify(presenceData)}`)
-          results.push({
-            userId: user.id,
-            error: presenceData.error,
-            success: false
-          })
-        }
+        return { user, presenceData, success: presenceData.ok }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        const errorDetails = error instanceof Error ? { stack: error.stack, name: error.name } : {}
-        console.error(`Error processing user ${user.id} (${user.name || user.slackUserId}): Network/parsing error - ${errorMessage} (Error details: ${JSON.stringify(errorDetails)})`)
+        console.error(`Error fetching presence for user ${user.id}: ${errorMessage}`)
+        return { user, error: errorMessage, success: false }
+      }
+    })
+
+    // Wait for all Slack API calls to complete
+    const presenceResults = await Promise.all(presencePromises)
+
+    // Now batch insert all presence logs to database
+    const presenceLogData = []
+    const results = []
+
+    for (const result of presenceResults) {
+      if (result.success && result.presenceData) {
+        const actualStatus = result.presenceData.presence === 'active' ? 'active' : 'away'
+        
+        console.log(`🟢 Presence check for ${result.user.name || result.user.slackUserId}: ${JSON.stringify({
+          presence: result.presenceData.presence,
+          online: result.presenceData.online,
+          auto_away: result.presenceData.auto_away,
+          manual_away: result.presenceData.manual_away,
+          connection_count: result.presenceData.connection_count,
+          last_activity: result.presenceData.last_activity,
+          actualStatus
+        })}`)
+
+        presenceLogData.push({
+          userId: result.user.id,
+          status: actualStatus,
+          timestamp: new Date(),
+          metadata: JSON.stringify({
+            online: result.presenceData.online ?? null,
+            auto_away: result.presenceData.auto_away ?? null,
+            manual_away: result.presenceData.manual_away ?? null,
+            connection_count: result.presenceData.connection_count ?? null,
+            last_activity: result.presenceData.last_activity ?? null,
+            raw_presence: result.presenceData.presence ?? null,
+            full_response: result.presenceData
+          })
+        })
+
         results.push({
-          userId: user.id,
-          error: errorMessage,
+          userId: result.user.id,
+          status: result.presenceData.presence,
+          success: true
+        })
+      } else {
+        const error = result.error || result.presenceData?.error || 'Unknown error'
+        console.error(`Failed to get presence for user ${result.user.id}: ${error}`)
+        results.push({
+          userId: result.user.id,
+          error,
           success: false
         })
       }
+    }
+
+    // Batch insert all presence logs at once
+    if (presenceLogData.length > 0) {
+      await prisma.presenceLog.createMany({
+        data: presenceLogData,
+        skipDuplicates: true
+      })
     }
 
     const successCount = results.filter(r => r.success).length

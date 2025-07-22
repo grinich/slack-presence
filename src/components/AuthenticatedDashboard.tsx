@@ -47,6 +47,7 @@ interface UserTodayData {
   name: string
   avatarUrl: string | null
   timezone: string | null
+  slackUserId: string
   timeline: {
     hour: number
     quarter: number

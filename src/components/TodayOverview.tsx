@@ -23,6 +23,7 @@ interface UserTodayData {
   name: string
   avatarUrl: string | null
   timezone: string | null
+  slackUserId: string
   timeline: TimelineData[]
   totalActiveMinutes: number
   messageCount: number
@@ -120,10 +121,25 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
   }
 
-  const formatNameAsFirstName = (name: string | null) => {
-    if (!name) return 'Unknown'
-    const parts = name.trim().split(' ')
-    return parts[0]
+  const formatAsSlackHandle = (slackUserId: string, name: string | null) => {
+    if (!slackUserId) return name || 'Unknown'
+    
+    // For now, we'll create a simplified handle from the name
+    // In the future, we can add an actual slackHandle field to the database
+    if (name) {
+      // Convert "John Doe" to "john.doe" as a reasonable Slack handle approximation
+      const handle = name.toLowerCase()
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+        .trim()
+        .split(/\s+/) // Split on whitespace
+        .join('.') // Join with dots
+        .substring(0, 20) // Limit length
+      
+      return `@${handle}`
+    }
+    
+    // Fallback to a simplified version of the Slack ID
+    return `@${slackUserId.substring(1, 8).toLowerCase()}`
   }
 
   const getTimezoneInfo = (timezone: string | null) => {
@@ -161,25 +177,25 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     }
   }
 
-  // Calculate current time position for the shared vertical indicator
+  // Calculate current time position for the new red line indicator
   const currentTimePosition = useMemo(() => {
     const currentHour = currentTime.getHours()
     const currentMinute = currentTime.getMinutes()
     
-    // Timeline shows full 24 hours (0-23)
-    const visibleStartHour = 0
-    const totalVisibleHours = 24 // Full day
+    // Calculate exact position as percentage within 24-hour timeline
+    const totalMinutesInDay = 24 * 60 // 1440 minutes
+    const currentMinutesFromStart = currentHour * 60 + currentMinute
+    const percentage = (currentMinutesFromStart / totalMinutesInDay) * 100
     
-    // Calculate current position within visible hours
-    const hoursFromStart = currentHour - visibleStartHour
-    const minutesFromStart = hoursFromStart * 60 + currentMinute
-    const totalVisibleMinutes = totalVisibleHours * 60 // 24 hours * 60 minutes
-    
-    // Calculate percentage position within the visible timeline
-    const position = (minutesFromStart / totalVisibleMinutes) * 100
-    
-    return position
+    return percentage
   }, [currentTime])
+  
+  // Format current time for the label
+  const currentTimeLabel = currentTime.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  })
 
   // Memoize expensive filtering and sorting operations
   const sortedUsers = useMemo(() => {
@@ -231,81 +247,74 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
         </div>
       </div>
 
-      {/* User timeline rows */}
-      <div className="space-y-1">
-        {sortedUsers.map((user) => {
-          const timezoneInfo = getTimezoneInfo(user.timezone)
-          return (
-            <div key={user.id} className="flex items-center gap-3 hover:bg-accent/30 transition-all duration-200 rounded-lg px-2 py-1 group">
-              {/* User name */}
-              <div className="w-24 flex-shrink-0 text-sm font-medium text-card-foreground group-hover:text-foreground text-right transition-colors">
-                {formatNameAsFirstName(user.name)}
-              </div>
+      {/* Timeline container with current time indicator */}
+      <div className="relative">
+        {/* User timeline rows */}
+        <div className="space-y-1">
+          {sortedUsers.map((user) => {
+            const timezoneInfo = getTimezoneInfo(user.timezone)
+            return (
+              <div key={user.id} className="flex items-center gap-3 hover:bg-accent/30 transition-all duration-200 rounded-lg px-2 py-1 group">
+                {/* User Slack handle */}
+                <div className="w-24 flex-shrink-0 text-sm font-medium text-card-foreground group-hover:text-foreground text-right transition-colors">
+                  {formatAsSlackHandle(user.slackUserId, user.name)}
+                </div>
+                
+                {/* Timezone offset */}
+                <div className="w-12 flex-shrink-0 text-xs text-muted-foreground font-mono text-center">
+                  {timezoneInfo.display}
+                </div>
               
-              {/* Timezone offset */}
-              <div className="w-12 flex-shrink-0 text-xs text-muted-foreground font-mono text-center">
-                {timezoneInfo.display}
+                {/* Timeline blocks */}
+                <div className="flex items-center flex-1 relative h-5">
+                  {(() => {
+                    const visibleSlots = user.timeline // Show full 24 hours
+                    return visibleSlots.map((slot) => {
+                      return (
+                        <div
+                          key={slot.blockIndex}
+                          className={cn(
+                            "h-5 cursor-pointer transition-all hover:scale-105 hover:ring-1 hover:ring-ring/50 flex-1 min-w-0 rounded-sm",
+                            getStatusColor(slot.status, slot.onlinePercentage),
+                            getStatusOpacity(slot.status)
+                          )}
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            handleSlotHover(slot, user, rect.left + rect.width / 2, rect.top - 40)
+                          }}
+                          onMouseLeave={handleSlotHoverLeave}
+                        />
+                      )
+                    })
+                  })()}
+                </div>
+                
+                {/* Daily total time */}
+                <div className="w-16 text-sm text-muted-foreground group-hover:text-foreground font-medium text-right flex-shrink-0 transition-colors">
+                  {formatMinutes(user.totalActiveMinutes)}
+                </div>
               </div>
-            
-            {/* Timeline blocks */}
-            <div className="flex items-center flex-1 relative h-4">
-              {(() => {
-                const visibleSlots = user.timeline // Show full 24 hours
-                return visibleSlots.map((slot) => {
-                  
-                  return (
-                    <div
-                      key={slot.blockIndex}
-                      className={cn(
-                        "h-5 cursor-pointer transition-all hover:scale-105 hover:ring-1 hover:ring-ring/50 flex-1 min-w-0 rounded-sm",
-                        getStatusColor(slot.status, slot.onlinePercentage),
-                        getStatusOpacity(slot.status)
-                      )}
-                      onMouseEnter={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        handleSlotHover(slot, user, rect.left + rect.width / 2, rect.top - 40)
-                      }}
-                      onMouseLeave={handleSlotHoverLeave}
-                    />
-                  )
-                })
-              })()}
-            </div>
-            
-            {/* Daily total time */}
-            <div className="w-16 text-sm text-muted-foreground group-hover:text-foreground font-medium text-right flex-shrink-0 transition-colors">
-              {formatMinutes(user.totalActiveMinutes)}
-            </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
         
-        {/* Shared vertical current time indicator that spans all rows */}
-        {currentTimePosition !== null && (
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-destructive z-10 pointer-events-none rounded-full"
-            style={{
-              left: `calc(10rem + (100% - 14rem) * ${currentTimePosition / 100})`, 
-              // 10rem = name(6rem) + gap(0.75rem) + timezone(3rem) + gap(0.75rem)
-              // 14rem = total fixed width including hours column(4rem) and final gap(0.75rem)  
-              // (100% - 14rem) = actual timeline area width
-              // currentTimePosition/100 = percentage as decimal within timeline area
-            }}
-          >
-            {/* Current time display */}
-            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-xs font-medium text-destructive-foreground bg-destructive px-2 py-1 rounded-md whitespace-nowrap shadow-sm">
-              {currentTime.toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                minute: '2-digit',
-                hour12: true 
-              })}
-            </div>
-            {/* Top indicator */}
-            <div className="absolute -top-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
-            {/* Bottom indicator */}
-            <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-destructive rounded-full" />
+        {/* NEW: Red vertical current time line spanning all rows */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20 pointer-events-none"
+          style={{
+            left: `calc(6rem + 3rem + 0.75rem + 0.75rem + (100% - 6rem - 3rem - 4rem - 2.25rem) * ${currentTimePosition / 100})`,
+            // 6rem = user handle width
+            // 3rem = timezone width  
+            // 0.75rem * 2 = gaps
+            // 4rem = daily total width
+            // 0.75rem = final gap
+          }}
+        >
+          {/* Current time label at the top */}
+          <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-white border border-red-500 text-red-500 text-xs font-semibold px-2 py-1 rounded whitespace-nowrap shadow-sm">
+            {currentTimeLabel}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Custom tooltip */}
@@ -329,7 +338,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             const endQuarter = Math.floor(endMinutes / 15)
             const endTime = formatTime(endHour, endQuarter)
             
-            return `${formatNameAsFirstName(hoveredSlot.user.name)} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
+            return `${formatAsSlackHandle(hoveredSlot.user.slackUserId, hoveredSlot.user.name)} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
           })()}
         </div>,
         document.body

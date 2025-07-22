@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
     const rangeEnd = new Date(newestWorkday.getTime() + 24 * 60 * 60 * 1000 - 1)
 
     // Batch fetch all presence logs for all users across all workdays
+    // Limit to essential fields to reduce memory usage
     const allPresenceLogs = await prisma.presenceLog.findMany({
       where: {
         userId: { in: userIds },
@@ -54,6 +55,12 @@ export async function GET(request: NextRequest) {
           gte: rangeStart,
           lte: rangeEnd,
         },
+      },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        timestamp: true,
       },
       orderBy: {
         timestamp: 'asc',
