@@ -228,5 +228,8 @@ export async function POST() {
       error: 'Initialization user sync failed',
       details: errorMessage 
     }, { status: 500 })
+  } finally {
+    // Ensure connection is released in serverless environment
+    await prisma.$disconnect()
   }
 }
