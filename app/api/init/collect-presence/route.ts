@@ -138,8 +138,5 @@ export async function POST() {
       error: 'Initialization presence collection failed',
       details: errorMessage 
     }, { status: 500 })
-  } finally {
-    // Ensure connection is released in serverless environment
-    await prisma.$disconnect()
   }
 }

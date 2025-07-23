@@ -183,8 +183,5 @@ export async function GET(request: NextRequest) {
       { error: 'Failed to fetch user timelines' },
       { status: 500 }
     )
-  } finally {
-    // Ensure connection is released in serverless environment
-    await prisma.$disconnect()
   }
 }

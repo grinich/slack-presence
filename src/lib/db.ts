@@ -1,6 +1,15 @@
 import { PrismaClient } from '@prisma/client'
 
-// DATABASE_URL validation removed as it's unused
+// Use DATABASE_URL from environment variables
+function getDatabaseUrl(): string {
+  const databaseUrl = process.env.DATABASE_URL
+  
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL environment variable is required')
+  }
+  
+  return databaseUrl
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -9,7 +18,12 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error'] : ['error']
+    datasources: {
+      db: {
+        url: getDatabaseUrl()
+      }
+    },
+    log: process.env.NODE_ENV === 'development' ? ['info', 'warn', 'error'] : ['error']
   })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
