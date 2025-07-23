@@ -85,6 +85,7 @@ export default function AuthenticatedDashboard() {
   } | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const previousUserIdsRef = useRef<string>('')
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -141,11 +142,10 @@ export default function AuthenticatedDashboard() {
         
         // Extract user IDs and fetch timeline data in batch only if needed
         const userIds = todayResult.data.map((user: UserTodayData) => user.id)
-        const currentUserIds = data?.map(u => u.id).sort().join(',') || ''
         const newUserIds = userIds.sort().join(',')
         
         // Only fetch timeline data if users changed or we don't have timeline data yet
-        if (userIds.length > 0 && (!timelineData || currentUserIds !== newUserIds)) {
+        if (userIds.length > 0 && (!timelineData || previousUserIdsRef.current !== newUserIds)) {
           const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
           const timelineResult = await timelineResponse.json()
           
@@ -156,6 +156,7 @@ export default function AuthenticatedDashboard() {
               timelineMap.set(userTimeline.userId, userTimeline.workdays)
             })
             setTimelineData(timelineMap)
+            previousUserIdsRef.current = newUserIds
           }
         }
       } else {
@@ -167,7 +168,7 @@ export default function AuthenticatedDashboard() {
       setLoading(false)
       setIsRefreshing(false) // Always clear refreshing state
     }
-  }, [status, isRefreshing, lastRefresh, data, timelineData])
+  }, [status, isRefreshing, lastRefresh])
 
   useEffect(() => {
     if (status !== 'authenticated') return
