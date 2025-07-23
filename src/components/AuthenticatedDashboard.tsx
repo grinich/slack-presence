@@ -121,62 +121,67 @@ export default function AuthenticatedDashboard() {
         // Mark as refreshing to prevent concurrent requests
         setIsRefreshing(true)
         setLastRefresh(now)
-      
-      // Calculate selected date in user's local timezone and convert to UTC for server
-      const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
-      const userDateEnd = new Date(userDateStart)
-      userDateEnd.setDate(userDateEnd.getDate() + 1)
-      userDateEnd.setMilliseconds(-1) // End of day
-      
-      // Fetch selected date's overview with timezone-aware date range
-      const todayResponse = await fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
-      const todayResult = await todayResponse.json()
-      
-      if (todayResult.success) {
-        // Transform UserTodayData to UserStats format
-        const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
-          id: user.id,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-          timezone: user.timezone,
-          totalActiveMinutes: user.totalActiveMinutes,
-          todayActiveMinutes: user.totalActiveMinutes,
-          lastSeen: null, // Not available in current API
-          isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
-        }))
         
-        setData(transformedData)
-        setTodayData(todayResult.data)
+        // Calculate selected date in user's local timezone and convert to UTC for server
+        const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+        const userDateEnd = new Date(userDateStart)
+        userDateEnd.setDate(userDateEnd.getDate() + 1)
+        userDateEnd.setMilliseconds(-1) // End of day
         
-        // Extract user IDs and fetch timeline data in batch only if needed
-        const userIds = todayResult.data.map((user: UserTodayData) => user.id)
-        const newUserIds = userIds.sort().join(',')
+        // Fetch selected date's overview with timezone-aware date range
+        const todayResponse = await fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
+        const todayResult = await todayResponse.json()
         
-        // Only fetch timeline data if users changed or we don't have timeline data yet
-        if (userIds.length > 0 && (!timelineData || previousUserIdsRef.current !== newUserIds)) {
-          const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
-          const timelineResult = await timelineResponse.json()
+        if (todayResult.success) {
+          // Transform UserTodayData to UserStats format
+          const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
+            id: user.id,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            timezone: user.timezone,
+            totalActiveMinutes: user.totalActiveMinutes,
+            todayActiveMinutes: user.totalActiveMinutes,
+            lastSeen: null, // Not available in current API
+            isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
+          }))
           
-          if (timelineResult.success) {
-            // Convert array to map for easier lookup
-            const timelineMap = new Map()
-            timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
-              timelineMap.set(userTimeline.userId, userTimeline.workdays)
-            })
-            setTimelineData(timelineMap)
-            previousUserIdsRef.current = newUserIds
+          setData(transformedData)
+          setTodayData(todayResult.data)
+          
+          // Extract user IDs and fetch timeline data in batch only if needed
+          const userIds = todayResult.data.map((user: UserTodayData) => user.id)
+          const newUserIds = userIds.sort().join(',')
+          
+          // Only fetch timeline data if users changed or we don't have timeline data yet
+          if (userIds.length > 0 && (!timelineData || previousUserIdsRef.current !== newUserIds)) {
+            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
+            const timelineResult = await timelineResponse.json()
+            
+            if (timelineResult.success) {
+              // Convert array to map for easier lookup
+              const timelineMap = new Map()
+              timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
+                timelineMap.set(userTimeline.userId, userTimeline.workdays)
+              })
+              setTimelineData(timelineMap)
+              previousUserIdsRef.current = newUserIds
+            }
           }
+        } else {
+          setError(todayResult.error || 'Failed to fetch data')
         }
-      } else {
-        setError(todayResult.error || 'Failed to fetch data')
+      } catch {
+        setError('Network error')
+      } finally {
+        setLoading(false)
+        setIsRefreshing(false) // Always clear refreshing state
       }
-    } catch {
-      setError('Network error')
-    } finally {
-      setLoading(false)
-      setIsRefreshing(false) // Always clear refreshing state
-    }
-  }, [status, isRefreshing, lastRefresh])
+    })()
+    
+    // Store the active request and return it
+    activeRequestRef.current = requestPromise
+    return requestPromise
+  }, [status, isRefreshing, lastRefresh, timelineData])
 
   useEffect(() => {
     if (status !== 'authenticated') return
@@ -207,14 +212,14 @@ export default function AuthenticatedDashboard() {
         clearInterval(refreshInterval)
       }
     }
-  }, [status, selectedDate])
+  }, [status, selectedDate, fetchDataForDate])
 
   // Separate effect for date changes - force immediate refresh
   useEffect(() => {
     if (status === 'authenticated') {
       fetchDataForDate(selectedDate, true)
     }
-  }, [selectedDate, status]) // fetchDataForDate is stable via useCallback
+  }, [selectedDate, status, fetchDataForDate])
 
 
 

@@ -1,15 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 
-// Use DATABASE_URL from environment variables
-function getDatabaseUrl(): string {
-  const databaseUrl = process.env.DATABASE_URL
-  
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL environment variable is required')
-  }
-  
-  return databaseUrl
-}
+// DATABASE_URL validation removed as it's unused
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
