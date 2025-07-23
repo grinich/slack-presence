@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const rangeEnd = new Date(newestWorkday.getTime() + 24 * 60 * 60 * 1000 - 1)
 
     // Batch fetch all presence logs for all users across all workdays
-    // Limit to essential fields to reduce memory usage
+    // Limit to essential fields to reduce memory usage and add reasonable limit
     const allPresenceLogs = await prisma.presenceLog.findMany({
       where: {
         userId: { in: userIds },
@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
       orderBy: {
         timestamp: 'asc',
       },
+      take: 50000, // Reasonable limit to prevent massive queries
     })
 
     // Messages removed - using presence data only
@@ -182,5 +183,8 @@ export async function GET(request: NextRequest) {
       { error: 'Failed to fetch user timelines' },
       { status: 500 }
     )
+  } finally {
+    // Ensure connection is released in serverless environment
+    await prisma.$disconnect()
   }
 }

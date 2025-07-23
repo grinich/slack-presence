@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       },
     })
 
-    // Batch fetch presence logs for all users in one query
+    // Batch fetch presence logs for all users in one query with reasonable limit
     const userIds = users.map(u => u.id)
     const allPresenceLogs = await prisma.presenceLog.findMany({
       where: {
@@ -61,6 +61,7 @@ export async function GET(request: Request) {
       orderBy: {
         timestamp: 'asc',
       },
+      take: 20000, // Reasonable limit for single day queries
     })
 
     // Group presence logs by userId for efficient lookup
@@ -191,5 +192,8 @@ export async function GET(request: Request) {
       { error: 'Failed to fetch today overview' },
       { status: 500 }
     )
+  } finally {
+    // Ensure connection is released in serverless environment  
+    await prisma.$disconnect()
   }
 }
