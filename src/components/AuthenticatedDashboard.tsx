@@ -86,6 +86,7 @@ export default function AuthenticatedDashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousUserIdsRef = useRef<string>('')
+  const activeRequestRef = useRef<Promise<void> | null>(null)
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -109,10 +110,17 @@ export default function AuthenticatedDashboard() {
       return
     }
     
-    try {
-      // Mark as refreshing to prevent concurrent requests
-      setIsRefreshing(true)
-      setLastRefresh(now)
+    // Prevent concurrent requests - if one is in flight, wait for it
+    if (activeRequestRef.current && !force) {
+      return activeRequestRef.current
+    }
+    
+    // Create and store the request promise
+    const requestPromise = (async () => {
+      try {
+        // Mark as refreshing to prevent concurrent requests
+        setIsRefreshing(true)
+        setLastRefresh(now)
       
       // Calculate selected date in user's local timezone and convert to UTC for server
       const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
@@ -199,14 +207,14 @@ export default function AuthenticatedDashboard() {
         clearInterval(refreshInterval)
       }
     }
-  }, [status, fetchDataForDate, selectedDate])
+  }, [status, selectedDate])
 
   // Separate effect for date changes - force immediate refresh
   useEffect(() => {
     if (status === 'authenticated') {
       fetchDataForDate(selectedDate, true)
     }
-  }, [selectedDate, status, fetchDataForDate])
+  }, [selectedDate, status]) // fetchDataForDate is stable via useCallback
 
 
 
