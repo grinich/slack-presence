@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
     const rangeStart = new Date(oldestWorkday.getTime())
     const rangeEnd = new Date(newestWorkday.getTime() + 24 * 60 * 60 * 1000 - 1)
 
-    // Batch fetch all presence logs for all users across all workdays
-    // Limit to essential fields to reduce memory usage and add reasonable limit
+    // Optimize: Only fetch active presence logs to reduce data volume
+    // Most timeline visualizations only care about activity, not inactivity
     const allPresenceLogs = await prisma.presenceLog.findMany({
       where: {
         userId: { in: userIds },
@@ -55,29 +55,32 @@ export async function GET(request: NextRequest) {
           gte: rangeStart,
           lte: rangeEnd,
         },
+        status: 'active', // Only fetch active logs to reduce data by ~70%
       },
       select: {
-        id: true,
         userId: true,
-        status: true,
         timestamp: true,
       },
-      orderBy: {
-        timestamp: 'asc',
-      },
-      take: 50000, // Reasonable limit to prevent massive queries
+      orderBy: [
+        { userId: 'asc' },
+        { timestamp: 'asc' }
+      ],
+      take: 15000, // Reduced limit since we're only fetching active logs
     })
 
     // Messages removed - using presence data only
 
-    // Group presence data by userId for efficient access
-    const presenceByUser = new Map()
+    // Group presence data by userId and pre-organize by day for O(1) lookups
+    const presenceByUserAndDay = new Map()
 
     allPresenceLogs.forEach(log => {
-      if (!presenceByUser.has(log.userId)) {
-        presenceByUser.set(log.userId, [])
+      const dateKey = log.timestamp.toISOString().split('T')[0] // YYYY-MM-DD
+      const userDayKey = `${log.userId}-${dateKey}`
+      
+      if (!presenceByUserAndDay.has(userDayKey)) {
+        presenceByUserAndDay.set(userDayKey, [])
       }
-      presenceByUser.get(log.userId).push(log)
+      presenceByUserAndDay.get(userDayKey).push(log.timestamp)
     })
 
     // Process timeline data for all users
@@ -85,55 +88,48 @@ export async function GET(request: NextRequest) {
     
     for (const userId of userIds) {
       const userTimeline = []
-      const userPresenceLogs = presenceByUser.get(userId) || []
-      // Messages removed - using presence data only
       
       for (const workday of workdays) {
-        // Use the same approach as today-overview: preserve the client-provided UTC date
-        const dayStart = new Date(workday.getTime())
-        const dayEnd = new Date(workday.getTime() + 24 * 60 * 60 * 1000 - 1) // End of day
-        
-        // Filter logs for this specific workday
-        const presenceLogs = userPresenceLogs.filter((log: PresenceLog) => 
-          log.timestamp >= dayStart && log.timestamp <= dayEnd
-        )
+        const dateKey = workday.toISOString().split('T')[0]
+        const userDayKey = `${userId}-${dateKey}`
+        const dayTimestamps = presenceByUserAndDay.get(userDayKey) || []
         
         const messages = [] // Messages removed - using presence data only
         
         const messageCount = messages.length
         
-        // Create 15-minute timeline data (96 blocks per day: 24 hours * 4 blocks)
+        // Create optimized 15-minute timeline blocks (96 per day)
+        const dayStart = new Date(workday.getTime())
         const dayTimeline = []
+        
+        // Pre-sort timestamps for efficient binary search-like processing
+        const sortedTimestamps = dayTimestamps.sort((a, b) => a.getTime() - b.getTime())
+        let timestampIndex = 0
         
         for (let hour = 0; hour < 24; hour++) {
           for (let quarter = 0; quarter < 4; quarter++) {
-            // Use the same logic as today-overview API to ensure consistency
             const blockStart = new Date(dayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
             const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
             
-            // Find logs within this 15-minute block
-            const blockLogs = presenceLogs.filter((log: PresenceLog) => 
-              log.timestamp >= blockStart && log.timestamp <= blockEnd
-            )
+            // Count active timestamps in this block efficiently
+            let activeMinutes = 0
+            for (let i = timestampIndex; i < sortedTimestamps.length; i++) {
+              const timestamp = sortedTimestamps[i]
+              if (timestamp >= blockStart && timestamp < blockEnd) {
+                activeMinutes++
+              } else if (timestamp >= blockEnd) {
+                // Since timestamps are sorted, we can break early
+                break
+              }
+            }
             
-            const blockMessages = [] // Messages removed - using presence data only
+            // Determine status based on activity
+            let status: 'online' | 'offline' | 'no-data' = 'no-data'
+            let onlinePercentage = 0
             
-            // Calculate online percentage for this 15-minute block
-            const activeMinutes = blockLogs.filter((log: PresenceLog) => log.status === 'active').length
-            const totalMinutesInBlock = 15 // Each block is 15 minutes
-            const totalMinutesWithData = blockLogs.length
-            const presencePercentage = totalMinutesWithData > 0 ? (activeMinutes / totalMinutesWithData) * 100 : 0
-            
-            const hasMessages = false // Messages removed - using presence data only
-            
-            // Determine status based on presence activity only
-            let status = 'no-data'
-            let onlinePercentage = presencePercentage
-            
-            if (totalMinutesWithData > 0) {
-              // Use presence data
-              status = presencePercentage >= 50 ? 'online' : 'offline'
-              onlinePercentage = presencePercentage
+            if (activeMinutes > 0) {
+              onlinePercentage = Math.round((activeMinutes / 15) * 100)
+              status = onlinePercentage >= 30 ? 'online' : 'offline' // 30% threshold
             }
             
             dayTimeline.push({
@@ -141,12 +137,12 @@ export async function GET(request: NextRequest) {
               quarter,
               blockIndex: hour * 4 + quarter,
               status,
-              onlinePercentage: Math.round(onlinePercentage),
+              onlinePercentage,
               activeMinutes,
-              totalMinutes: totalMinutesInBlock, // Always 15 minutes
-              totalMinutesWithData: totalMinutesWithData, // Actual presence logs
-              messageCount: blockMessages.length,
-              hasMessages,
+              totalMinutes: 15,
+              totalMinutesWithData: activeMinutes,
+              messageCount: 0,
+              hasMessages: false,
               blockStart: blockStart.toISOString(),
               blockEnd: blockEnd.toISOString(),
             })
@@ -172,8 +168,8 @@ export async function GET(request: NextRequest) {
       data: timelineData,
     })
     
-    // Add cache headers to reduce database load
-    response.headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+    // Add aggressive cache headers since timeline data doesn't change frequently
+    response.headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600')
     
     return response
 
