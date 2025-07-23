@@ -18,12 +18,14 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: {
-      db: {
-        url: getDatabaseUrl()
-      }
-    },
-    log: process.env.NODE_ENV === 'development' ? ['info', 'warn', 'error'] : ['error']
+    log: process.env.NODE_ENV === 'development' ? ['error'] : ['error']
   })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+// Ensure graceful shutdown
+if (typeof window === 'undefined') {
+  process.on('beforeExit', async () => {
+    await prisma.$disconnect()
+  })
+}
