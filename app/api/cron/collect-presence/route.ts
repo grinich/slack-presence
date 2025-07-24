@@ -132,10 +132,16 @@ export async function GET(request: NextRequest) {
 
     // Batch insert all presence logs at once
     if (presenceLogData.length > 0) {
-      await prisma.presenceLog.createMany({
-        data: presenceLogData,
-        skipDuplicates: true
-      })
+      try {
+        const insertResult = await prisma.presenceLog.createMany({
+          data: presenceLogData,
+          skipDuplicates: true
+        })
+        console.log(`Successfully inserted ${insertResult.count} presence logs out of ${presenceLogData.length} prepared`)
+      } catch (error) {
+        console.error('Database insert failed:', error)
+        console.error('Failed presence data sample:', presenceLogData[0])
+      }
     }
 
     const successCount = results.filter(r => r.success).length
