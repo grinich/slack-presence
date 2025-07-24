@@ -40,6 +40,10 @@ export default function StartupInit() {
             if (syncResponse.ok) {
               const syncResult = await syncResponse.json()
               console.log('Background user sync completed:', syncResult)
+            } else if (syncResponse.status === 429) {
+              const errorData = await syncResponse.json()
+              console.warn('Background user sync rate limited:', errorData.message)
+              // Could trigger a global state update here if needed
             } else {
               console.warn('Background user sync failed - using existing data')
             }
