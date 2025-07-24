@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { format } from 'date-fns'
 
-interface PresenceLog {
-  id: string
-  userId: string
-  status: string
-  timestamp: Date
-  metadata?: string | null
-}
+// PresenceLog interface removed as it's no longer used
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -104,7 +98,6 @@ export async function GET(request: NextRequest) {
         
         // Pre-sort timestamps for efficient binary search-like processing
         const sortedTimestamps = dayTimestamps.sort((a, b) => a.getTime() - b.getTime())
-        let timestampIndex = 0
         
         for (let hour = 0; hour < 24; hour++) {
           for (let quarter = 0; quarter < 4; quarter++) {
@@ -113,7 +106,7 @@ export async function GET(request: NextRequest) {
             
             // Count active timestamps in this block efficiently
             let activeMinutes = 0
-            for (let i = timestampIndex; i < sortedTimestamps.length; i++) {
+            for (let i = 0; i < sortedTimestamps.length; i++) {
               const timestamp = sortedTimestamps[i]
               if (timestamp >= blockStart && timestamp < blockEnd) {
                 activeMinutes++

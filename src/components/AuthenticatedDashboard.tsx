@@ -199,7 +199,8 @@ export default function AuthenticatedDashboard() {
     // Store the active request and return it
     activeRequestRef.current = requestPromise
     return requestPromise
-  }, [status])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]) // timelineData intentionally excluded to prevent circular dependency
 
   useEffect(() => {
     if (status !== 'authenticated') return

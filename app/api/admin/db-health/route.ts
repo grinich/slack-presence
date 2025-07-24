@@ -33,14 +33,14 @@ export async function GET(request: NextRequest) {
     }
     
     try {
-      const userCheck = await prisma.user.findFirst({ select: { id: true } })
+      await prisma.user.findFirst({ select: { id: true } })
       operationalChecks.canReadUsers = true
     } catch (error) {
       console.error('❌ Cannot read users table:', error)
     }
     
     try {
-      const logCheck = await prisma.presenceLog.findFirst({ select: { id: true } })
+      await prisma.presenceLog.findFirst({ select: { id: true } })
       operationalChecks.canReadPresenceLogs = true
     } catch (error) {
       console.error('❌ Cannot read presence_logs table:', error)
