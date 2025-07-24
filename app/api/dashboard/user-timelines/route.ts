@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
         const dayTimeline = []
         
         // Pre-sort timestamps for efficient binary search-like processing
-        const sortedTimestamps = dayTimestamps.sort((a, b) => a.getTime() - b.getTime())
+        const sortedTimestamps = dayTimestamps.sort((a: Date, b: Date) => a.getTime() - b.getTime())
         
         for (let hour = 0; hour < 24; hour++) {
           for (let quarter = 0; quarter < 4; quarter++) {
