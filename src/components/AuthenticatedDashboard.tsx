@@ -78,6 +78,8 @@ export default function AuthenticatedDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<number>(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const lastRefreshRef = useRef<number>(0)
+  const isRefreshingRef = useRef<boolean>(false)
   const [hoveredUser, setHoveredUser] = useState<{
     user: UserTodayData
     x: number
@@ -100,13 +102,13 @@ export default function AuthenticatedDashboard() {
     if (status !== 'authenticated') return
     
     // Skip if already refreshing to prevent concurrent requests
-    if (isRefreshing && !force) {
+    if (isRefreshingRef.current && !force) {
       return
     }
     
     // Skip refresh if not enough time has passed (unless forced)
     const now = Date.now()
-    if (!force && now - lastRefresh < 25000) { // 25 second minimum
+    if (!force && now - lastRefreshRef.current < 25000) { // 25 second minimum
       return
     }
     
@@ -119,6 +121,8 @@ export default function AuthenticatedDashboard() {
     const requestPromise = (async () => {
       try {
         // Mark as refreshing to prevent concurrent requests
+        isRefreshingRef.current = true
+        lastRefreshRef.current = now
         setIsRefreshing(true)
         setLastRefresh(now)
         
@@ -174,6 +178,7 @@ export default function AuthenticatedDashboard() {
         setError('Network error')
       } finally {
         setLoading(false)
+        isRefreshingRef.current = false
         setIsRefreshing(false) // Always clear refreshing state
       }
     })()
@@ -181,7 +186,7 @@ export default function AuthenticatedDashboard() {
     // Store the active request and return it
     activeRequestRef.current = requestPromise
     return requestPromise
-  }, [status, isRefreshing, lastRefresh])
+  }, [status])
 
   useEffect(() => {
     if (status !== 'authenticated') return
