@@ -181,7 +181,7 @@ export default function AuthenticatedDashboard() {
     // Store the active request and return it
     activeRequestRef.current = requestPromise
     return requestPromise
-  }, [status, isRefreshing, lastRefresh, timelineData])
+  }, [status, isRefreshing, lastRefresh])
 
   useEffect(() => {
     if (status !== 'authenticated') return

@@ -3,38 +3,17 @@
 import { useEffect, useState } from 'react'
 
 export default function StartupInit() {
-  const [initStatus, setInitStatus] = useState<string>('Starting initialization...')
+  const [initStatus, setInitStatus] = useState<string>('')
   
   useEffect(() => {
     async function initialize() {
       try {
-        console.log('Starting user sync initialization...')
-        setInitStatus('Syncing users from Slack...')
+        // Start initialization in background without blocking UI
+        console.log('Starting background initialization...')
+        setInitStatus('Loading app...')
         
-        // Call the sync-all-users endpoint directly (without cron header check)
-        const syncResponse = await fetch('/api/init/sync-users', {
-          method: 'POST'
-        })
-        
-        if (!syncResponse.ok) {
-          const errorData = await syncResponse.json()
-          
-          // Handle rate limiting gracefully
-          if (syncResponse.status === 429 && errorData.graceful) {
-            console.warn('User sync rate limited - continuing with existing data')
-            setInitStatus('Rate limited - using cached data...')
-            // Don't return, continue to presence collection
-          } else {
-            console.error('User sync failed:', syncResponse.status, errorData)
-            setInitStatus('User sync failed - using cached data')
-            return
-          }
-        } else {
-          const syncResult = await syncResponse.json()
-          console.log('User sync completed:', syncResult)
-        }
-        
-        setInitStatus('Collecting initial presence data...')
+        // Quick presence collection only (skip heavy user sync)
+        setInitStatus('Loading recent activity...')
         
         // Call the collect-presence endpoint directly (without cron header check)  
         const presenceResponse = await fetch('/api/init/collect-presence', {
@@ -44,19 +23,35 @@ export default function StartupInit() {
         if (!presenceResponse.ok) {
           const presenceErrorData = await presenceResponse.json()
           console.error('Presence collection failed:', presenceResponse.status, presenceErrorData)
-          setInitStatus('Presence collection failed - app ready')
-          // Still show as completed since the app can function without initial presence data
-          setTimeout(() => setInitStatus('App ready (limited data)'), 1000)
-          return
+          // Don't show error to user, app can function without this
+        } else {
+          const presenceResult = await presenceResponse.json()
+          console.log('Presence collection completed:', presenceResult)
         }
         
-        const presenceResult = await presenceResponse.json()
-        console.log('Presence collection completed:', presenceResult)
+        // Run user sync in background without blocking UI
+        setTimeout(async () => {
+          try {
+            console.log('Starting background user sync...')
+            const syncResponse = await fetch('/api/init/sync-users', {
+              method: 'POST'
+            })
+            
+            if (syncResponse.ok) {
+              const syncResult = await syncResponse.json()
+              console.log('Background user sync completed:', syncResult)
+            } else {
+              console.warn('Background user sync failed - using existing data')
+            }
+          } catch (error) {
+            console.warn('Background user sync error:', error)
+          }
+        }, 1000) // Delay by 1 second to not block initial load
         
-        setInitStatus('Initialization completed')
+        setInitStatus('App ready')
         
-        // Hide the status after a few seconds
-        setTimeout(() => setInitStatus(''), 3000)
+        // Hide the status quickly since app is ready
+        setTimeout(() => setInitStatus(''), 1500)
         
       } catch (error) {
         console.error('Initialization error:', error)
