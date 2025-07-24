@@ -13,10 +13,9 @@ export async function GET() {
       const tasks = [
         // Sync all company users (includes timezone data)
         fetch(`${baseUrl}/api/cron/sync-all-users`, {
-          method: 'POST',
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${cronSecret}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${cronSecret}`
           }
         }).then(async (response) => {
           if (response.ok) {
@@ -34,10 +33,9 @@ export async function GET() {
 
         // Collect current presence data
         fetch(`${baseUrl}/api/cron/collect-presence`, {
-          method: 'POST',
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${cronSecret}`,
-            'Content-Type': 'application/json'
+            'Authorization': `Bearer ${cronSecret}`
           }
         }).then(async (response) => {
           if (response.ok) {
