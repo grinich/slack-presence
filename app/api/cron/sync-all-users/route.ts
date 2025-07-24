@@ -29,22 +29,45 @@ interface SlackUsersResponse {
 }
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now()
+  const requestId = Math.random().toString(36).substring(7)
+  
+  console.log(`[${requestId}] 🚀 Starting company-wide user sync at ${new Date().toISOString()}`)
+  console.log(`[${requestId}] Environment check:`, {
+    nodeEnv: process.env.NODE_ENV,
+    hasCronSecret: !!process.env.CRON_SECRET,
+    hasDbUrl: !!process.env.DATABASE_URL,
+    userAgent: request.headers.get('user-agent'),
+    forwardedFor: request.headers.get('x-forwarded-for')
+  })
+
   try {
     // Enhanced cron authentication security
     if (!process.env.CRON_SECRET || process.env.CRON_SECRET.length < 32) {
-      console.error('Invalid cron configuration - secret too short or missing')
+      console.error(`[${requestId}] ❌ Invalid cron configuration - secret too short or missing`)
       return NextResponse.json({ error: 'Invalid cron configuration' }, { status: 500 })
     }
 
     const authHeader = request.headers.get('authorization')
     if (!authHeader || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      console.warn('Unauthorized cron attempt from:', request.headers.get('x-forwarded-for') || 'unknown')
+      console.warn(`[${requestId}] ⚠️ Unauthorized cron attempt from:`, request.headers.get('x-forwarded-for') || 'unknown')
       return NextResponse.json({ error: 'Unauthorized - not from Vercel cron' }, { status: 401 })
     }
 
-    console.log('Starting company-wide user sync...')
+    console.log(`[${requestId}] ✅ Authentication successful, proceeding with user sync`)
     
+    // Test database connection first
+    console.log(`[${requestId}] 🔌 Testing database connection...`)
+    try {
+      await prisma.$connect()
+      console.log(`[${requestId}] ✅ Database connection successful`)
+    } catch (dbError) {
+      console.error(`[${requestId}] ❌ Database connection failed:`, dbError)
+      return NextResponse.json({ error: 'Database connection failed', details: dbError.message }, { status: 500 })
+    }
+
     // Get one user with a valid bot token to fetch team members
+    console.log(`[${requestId}] 👤 Looking for admin user with access token...`)
     const adminUser = await prisma.user.findFirst({
       where: {
         slackAccessToken: { not: null }
@@ -52,8 +75,11 @@ export async function GET(request: NextRequest) {
     })
 
     if (!adminUser) {
+      console.error(`[${requestId}] ❌ No authenticated users found in database`)
       return NextResponse.json({ error: 'No authenticated users found' }, { status: 400 })
     }
+    
+    console.log(`[${requestId}] ✅ Found admin user: ${adminUser.name || adminUser.slackUserId}`)
 
     // Get bot token from user metadata
     let botToken = null
@@ -68,9 +94,10 @@ export async function GET(request: NextRequest) {
 
     // Use bot token if available, otherwise use user token
     const token = botToken || adminUser.slackAccessToken
-    console.log('Using token type:', botToken ? 'bot' : 'user')
+    console.log(`[${requestId}] 🔑 Using token type:`, botToken ? 'bot' : 'user')
 
     // Fetch all team members
+    console.log(`[${requestId}] 📡 Fetching team members from Slack API...`)
     const usersResponse = await fetch('https://slack.com/api/users.list', {
       method: 'POST',
       headers: {
@@ -79,14 +106,19 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    if (!usersResponse.ok) {
+      console.error(`[${requestId}] ❌ HTTP error from Slack API: ${usersResponse.status} ${usersResponse.statusText}`)
+      return NextResponse.json({ error: `HTTP error: ${usersResponse.status}` }, { status: 500 })
+    }
+
     const usersData: SlackUsersResponse = await usersResponse.json()
 
     if (!usersData.ok) {
-      console.error('Failed to fetch team members:', usersData.error)
+      console.error(`[${requestId}] ❌ Failed to fetch team members:`, usersData.error)
       return NextResponse.json({ error: `Slack API error: ${usersData.error}` }, { status: 400 })
     }
 
-    console.log(`Found ${usersData.members.length} team members`)
+    console.log(`[${requestId}] ✅ Found ${usersData.members.length} team members from Slack`)
 
     // Filter active users first to reduce noise in logs
     const activeMembers = usersData.members.filter(member => {
@@ -205,27 +237,46 @@ export async function GET(request: NextRequest) {
     const created = results.filter(r => r.action === 'created').length
     const updated = results.filter(r => r.action === 'updated').length
     const errors = results.filter(r => r.action === 'error').length
+    const duration = Date.now() - startTime
 
-    console.log(`Company-wide sync completed: ${created} created, ${updated} updated, ${errors} errors, ${inactiveUsers.length} marked inactive`)
+    console.log(`[${requestId}] 🎉 Company-wide sync completed in ${duration}ms: ${created} created, ${updated} updated, ${errors} errors, ${inactiveUsers.length} marked inactive`)
+    
+    // Log any errors for debugging
+    if (errors > 0) {
+      const errorDetails = results.filter(r => r.action === 'error').map(r => ({
+        userId: r.userId,
+        error: r.error
+      }))
+      console.log(`[${requestId}] ❌ Error details:`, errorDetails)
+    }
 
     return NextResponse.json({
       message: 'Company-wide user sync completed',
+      requestId,
       results: {
         total: results.length,
         created,
         updated,
         errors,
-        markedInactive: inactiveUsers.length
+        markedInactive: inactiveUsers.length,
+        duration: `${duration}ms`
       },
       timestamp: new Date().toISOString()
     })
 
   } catch (error) {
+    const duration = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('Error in company-wide user sync:', error)
+    console.error(`[${requestId}] ❌ Critical error in company-wide user sync after ${duration}ms:`, {
+      error: errorMessage,
+      stack: error.stack,
+      name: error.name
+    })
     return NextResponse.json({ 
       error: 'Company-wide sync failed',
-      details: errorMessage 
+      requestId,
+      details: errorMessage,
+      duration: `${duration}ms`
     }, { status: 500 })
   }
 }
