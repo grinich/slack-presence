@@ -35,45 +35,7 @@ export const prisma =
         url: getDatabaseUrl()
       }
     },
-    log: [
-      {
-        emit: 'event',
-        level: 'query',
-      },
-      {
-        emit: 'event',
-        level: 'error',
-      },
-      {
-        emit: 'event',
-        level: 'info',
-      },
-      {
-        emit: 'event',
-        level: 'warn',
-      },
-    ],
+    log: process.env.NODE_ENV === 'development' ? ['info', 'warn', 'error'] : ['error']
   })
-
-// Set up event listeners for better debugging
-prisma.$on('query', (e) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🗃️ Query:', e.query)
-    console.log('🗃️ Params:', e.params)
-    console.log('🗃️ Duration:', e.duration + 'ms')
-  }
-})
-
-prisma.$on('error', (e) => {
-  console.error('❌ Database Error:', e)
-})
-
-prisma.$on('warn', (e) => {
-  console.warn('⚠️ Database Warning:', e)
-})
-
-prisma.$on('info', (e) => {
-  console.log('ℹ️ Database Info:', e)
-})
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma

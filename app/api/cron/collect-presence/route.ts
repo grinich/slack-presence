@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
       console.log(`[${requestId}] ✅ Database connection successful`)
     } catch (dbError) {
       console.error(`[${requestId}] ❌ Database connection failed:`, dbError)
-      return NextResponse.json({ error: 'Database connection failed', details: dbError.message }, { status: 500 })
+      const errorMessage = dbError instanceof Error ? dbError.message : String(dbError)
+      return NextResponse.json({ error: 'Database connection failed', details: errorMessage }, { status: 500 })
     }
 
     // Get one user with a valid bot token to check all users' presence
@@ -190,11 +191,14 @@ export async function GET(request: NextRequest) {
           console.warn(`[${requestId}] ⚠️ Some records were skipped: ${presenceLogData.length - insertResult.count} duplicates or constraint violations`)
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorCode = error && typeof error === 'object' && 'code' in error ? (error as { code: string }).code : undefined
+        const errorMeta = error && typeof error === 'object' && 'meta' in error ? (error as { meta: unknown }).meta : undefined
         console.error(`[${requestId}] ❌ Database insert failed:`, {
-          error: error.message,
-          code: error.code,
-          meta: error.meta,
-          stack: error.stack
+          error: errorMessage,
+          code: errorCode,
+          meta: errorMeta,
+          stack: error instanceof Error ? error.stack : undefined
         })
         console.error(`[${requestId}] 📋 Failed presence data sample:`, JSON.stringify(presenceLogData[0], null, 2))
         console.error(`[${requestId}] 📋 All failed data:`, JSON.stringify(presenceLogData, null, 2))
@@ -235,8 +239,8 @@ export async function GET(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[${requestId}] ❌ Critical error in presence collection job after ${duration}ms:`, {
       error: errorMessage,
-      stack: error.stack,
-      name: error.name
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown'
     })
     return NextResponse.json({ 
       error: 'Internal server error',

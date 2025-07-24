@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
       console.log(`[${requestId}] ✅ Database connection successful`)
     } catch (dbError) {
       console.error(`[${requestId}] ❌ Database connection failed:`, dbError)
-      return NextResponse.json({ error: 'Database connection failed', details: dbError.message }, { status: 500 })
+      const errorMessage = dbError instanceof Error ? dbError.message : String(dbError)
+      return NextResponse.json({ error: 'Database connection failed', details: errorMessage }, { status: 500 })
     }
 
     // Get one user with a valid bot token to fetch team members
@@ -269,8 +270,8 @@ export async function GET(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[${requestId}] ❌ Critical error in company-wide user sync after ${duration}ms:`, {
       error: errorMessage,
-      stack: error.stack,
-      name: error.name
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown'
     })
     return NextResponse.json({ 
       error: 'Company-wide sync failed',
