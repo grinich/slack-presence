@@ -149,14 +149,14 @@ export async function GET(
       const timeline: PresenceBlock[] = []
       let dayActiveMinutes = 0
       
-      // Get the start of the current day, preserving the client's timezone intent
-      const dayStart = new Date(currentDate)
-      dayStart.setHours(0, 0, 0, 0)
+      // Use the client's timezone boundaries by creating a day start from the dateKey
+      // This preserves the client's timezone intent like the dashboard API does
+      const dayStartForClient = new Date(dateKey + 'T00:00:00.000Z')
       
       for (let hour = 0; hour < 24; hour++) {
         for (let quarter = 0; quarter < 4; quarter++) {
-          // Calculate block times relative to the day start
-          const blockStart = new Date(dayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
+          // Calculate block boundaries directly from dayStartForClient which preserves the client's timezone intent
+          const blockStart = new Date(dayStartForClient.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
           const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
           
           // Find logs within this 15-minute block
