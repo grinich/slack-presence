@@ -134,9 +134,14 @@ export async function GET(
     const days: DayData[] = []
     let totalActiveMinutes = 0
     
-    const currentDate = new Date(adjustedStartDate)
+    // Use date-only iteration to avoid timezone edge cases
+    const startDateKey = adjustedStartDate.toISOString().split('T')[0]
+    const endDateKey = adjustedEndDate.toISOString().split('T')[0]
     
-    while (currentDate <= adjustedEndDate) {
+    const currentDate = new Date(startDateKey + 'T00:00:00.000Z')
+    const endDate = new Date(endDateKey + 'T23:59:59.999Z')
+    
+    while (currentDate <= endDate) {
       const dateKey = currentDate.toISOString().split('T')[0]
       const dayLogs = logsByDate.get(dateKey) || []
       
