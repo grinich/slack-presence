@@ -135,15 +135,13 @@ export default function UserDetailPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-4 mb-6">
-            <Button 
-              onClick={() => router.push('/')}
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground"
+            <a 
+              href="/"
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Dashboard
-            </Button>
+            </a>
           </div>
           
           <div className="flex items-start justify-between">
