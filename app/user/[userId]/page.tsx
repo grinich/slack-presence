@@ -60,8 +60,9 @@ export default function UserDetailPage() {
       const startDate = new Date()
       startDate.setDate(endDate.getDate() - (weeks * 7))
       
+      const timezoneOffset = startDate.getTimezoneOffset()
       const response = await fetch(
-        `/api/user/${userId}/activity?start=${startDate.toISOString()}&end=${endDate.toISOString()}`
+        `/api/user/${userId}/activity?start=${startDate.toISOString()}&end=${endDate.toISOString()}&tz=${timezoneOffset}`
       )
       const result = await response.json()
       

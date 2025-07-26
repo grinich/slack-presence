@@ -43,6 +43,7 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const startParam = searchParams.get('start')
   const endParam = searchParams.get('end')
+  const timezoneOffsetParam = searchParams.get('tz')
   const { userId } = await params
 
   if (!userId) {
@@ -186,12 +187,26 @@ export async function GET(
         }
       }
       
-      // Get day name from the dateKey (YYYY-MM-DD) to ensure it matches the client's expectation
-      // Parse the date parts and create a date that represents the same calendar day
+      // Get day name from the dateKey, accounting for client timezone
       const [year, month, day] = dateKey.split('-').map(Number)
-      const dateForDayName = new Date(year, month - 1, day) // month is 0-indexed
-      const dayName = dateForDayName.toLocaleDateString('en-US', { weekday: 'long' })
-      const dayShort = dateForDayName.toLocaleDateString('en-US', { weekday: 'short' })
+      const dateForDayName = new Date(year, month - 1, day)
+      
+      // If client provided timezone offset, use it to ensure day names match client's perspective
+      let dayName: string
+      let dayShort: string
+      
+      if (timezoneOffsetParam) {
+        // Use client's timezone offset to get the correct day name
+        const clientTimezoneOffset = parseInt(timezoneOffsetParam)
+        const utcTime = dateForDayName.getTime() + (dateForDayName.getTimezoneOffset() * 60000)
+        const clientTime = new Date(utcTime - (clientTimezoneOffset * 60000))
+        dayName = clientTime.toLocaleDateString('en-US', { weekday: 'long' })
+        dayShort = clientTime.toLocaleDateString('en-US', { weekday: 'short' })
+      } else {
+        // Fallback to server timezone
+        dayName = dateForDayName.toLocaleDateString('en-US', { weekday: 'long' })
+        dayShort = dateForDayName.toLocaleDateString('en-US', { weekday: 'short' })
+      }
       
       days.push({
         date: dateKey,
