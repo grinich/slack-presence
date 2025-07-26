@@ -315,23 +315,27 @@ function UserTimeline({ userId, className, workdays: preFetchedWorkdays }: UserT
           )
         })}
         
-        {/* Shared vertical current time indicator that spans all rows */}
+        {/* Current time indicator - only shows on the first day (today/selected date) */}
         {(() => {
-          // Check if today is in the workdays
-          const now = currentTime
-          const today = workdays.find(workday => {
-            const dateParts = workday.date.split('-')
-            const year = parseInt(dateParts[0])
-            const month = parseInt(dateParts[1])
-            const day = parseInt(dateParts[2])
-            const workdayDate = new Date(year, month - 1, day)
-            
-            return now.getFullYear() === workdayDate.getFullYear() &&
-                   now.getMonth() === workdayDate.getMonth() &&
-                   now.getDate() === workdayDate.getDate()
-          })
+          // Only show the red line on the first workday (today/selected date)
+          if (workdays.length === 0) return null
           
-          if (!today) return null
+          const firstWorkday = workdays[0] // First day is the selected date
+          const now = currentTime
+          
+          // Check if the first workday is today (current date)
+          const dateParts = firstWorkday.date.split('-')
+          const year = parseInt(dateParts[0])
+          const month = parseInt(dateParts[1])
+          const day = parseInt(dateParts[2])
+          const workdayDate = new Date(year, month - 1, day)
+          
+          const isFirstDayToday = now.getFullYear() === workdayDate.getFullYear() &&
+                                 now.getMonth() === workdayDate.getMonth() &&
+                                 now.getDate() === workdayDate.getDate()
+          
+          // Only show current time indicator if the first day is today
+          if (!isFirstDayToday) return null
           
           // Calculate current position using the same logic as TodayOverview
           const currentHour = now.getHours()
@@ -351,17 +355,16 @@ function UserTimeline({ userId, className, workdays: preFetchedWorkdays }: UserT
           
           return (
             <div
-              className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
+              className="absolute w-px bg-red-400 z-10 pointer-events-none"
               style={{
                 left: `calc(9rem + (100% - 12.5rem) * ${currentTimePosition / 100})`,
-                // 9rem = day name(5rem) + gap(0.5rem) + date(3rem) + gap(0.5rem)  
-                // 12.5rem = total fixed width including hours column(3rem) and final gap(0.5rem)
+                top: '0',
+                height: '1rem', // Match timeline block height (h-4)
+                maxHeight: '1rem', // Ensure it doesn't exceed block height
               }}
             >
-              {/* Top indicator */}
+              {/* Top indicator only */}
               <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-red-400 rounded-full" />
-              {/* Bottom indicator */}
-              <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-red-400 rounded-full" />
             </div>
           )
         })()}

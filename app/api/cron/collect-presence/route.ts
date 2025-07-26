@@ -166,7 +166,23 @@ export async function GET(request: NextRequest) {
         })
       } else {
         const error = result.error || result.presenceData?.error || 'Unknown error'
-        console.error(`Failed to get presence for user ${result.user.id}: ${error}`)
+        console.error(`🔴 Failed to get presence for user ${result.user.name || result.user.slackUserId} (${result.user.id}): ${error}`)
+        
+        // For users without tokens, still create a presence log with offline status
+        // This ensures they show up in the UI with some data
+        if (error.includes('missing_scope') || error.includes('not_authed') || error.includes('account_inactive')) {
+          console.log(`📝 Creating offline log for user without proper access: ${result.user.name || result.user.slackUserId}`)
+          presenceLogData.push({
+            userId: result.user.id,
+            status: 'offline',
+            timestamp: new Date(),
+            metadata: JSON.stringify({
+              error: error,
+              note: 'User lacks proper Slack authentication or permissions'
+            })
+          })
+        }
+        
         results.push({
           userId: result.user.id,
           error,

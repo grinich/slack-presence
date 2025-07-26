@@ -22,45 +22,49 @@ interface UserStats {
 }
 
 
+interface PresenceBlock {
+  hour: number
+  quarter: number
+  blockIndex: number
+  status: 'online' | 'offline' | 'no-data'
+  onlinePercentage: number
+  activeMinutes: number
+  totalMinutes: number
+  messageCount: number
+  hasMessages: boolean
+  blockStart: string // UTC ISO string
+  blockEnd: string // UTC ISO string
+}
+
 interface WorkdayData {
   date: string
   dayName: string
   dayShort: string
-  timeline: {
-    hour: number
-    quarter: number
-    blockIndex: number
-    status: 'online' | 'offline' | 'no-data'
-    onlinePercentage: number
-    activeMinutes: number
-    totalMinutes: number
-    messageCount: number
-    hasMessages: boolean
-    blockStart: string // UTC ISO string
-    blockEnd: string // UTC ISO string
-  }[]
+  timeline: PresenceBlock[]
   messageCount: number
+}
+
+interface UserPresenceData {
+  id: string
+  name: string | null
+  avatarUrl: string | null
+  timezone: string | null
+  slackUserId: string
+  timeline: PresenceBlock[]
+  totalActiveMinutes: number
+  messageCount: number
+  isCurrentlyOnline: boolean
+  lastActiveTime: string | null
+  workdays: WorkdayData[]
 }
 
 interface UserTodayData {
   id: string
-  name: string
+  name: string | null
   avatarUrl: string | null
   timezone: string | null
   slackUserId: string
-  timeline: {
-    hour: number
-    quarter: number
-    blockIndex: number
-    status: 'online' | 'offline' | 'no-data'
-    onlinePercentage: number
-    activeMinutes: number
-    totalMinutes: number
-    messageCount: number
-    hasMessages: boolean
-    blockStart: string // UTC ISO string
-    blockEnd: string // UTC ISO string
-  }[]
+  timeline: PresenceBlock[]
   totalActiveMinutes: number
   messageCount: number
   isCurrentlyOnline: boolean
@@ -77,8 +81,6 @@ export default function AuthenticatedDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rateLimited, setRateLimited] = useState<boolean>(false)
-  const [lastRefresh, setLastRefresh] = useState<number>(0)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const lastRefreshRef = useRef<number>(0)
   const isRefreshingRef = useRef<boolean>(false)
   const [hoveredUser, setHoveredUser] = useState<{
@@ -88,7 +90,6 @@ export default function AuthenticatedDashboard() {
   } | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const previousUserIdsRef = useRef<string>('')
   const activeRequestRef = useRef<Promise<void> | null>(null)
 
   // Redirect to sign-in if not authenticated
@@ -98,7 +99,7 @@ export default function AuthenticatedDashboard() {
     }
   }, [status, router])
 
-  // Consolidated fetch function to eliminate duplication
+  // Unified fetch function using new API
   const fetchDataForDate = useCallback(async (targetDate: Date, force = false) => {
     if (status !== 'authenticated') return
     
@@ -124,61 +125,61 @@ export default function AuthenticatedDashboard() {
         // Mark as refreshing to prevent concurrent requests
         isRefreshingRef.current = true
         lastRefreshRef.current = now
-        setIsRefreshing(true)
-        setLastRefresh(now)
         
-        // Calculate selected date in user's local timezone and convert to UTC for server
-        const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
-        const userDateEnd = new Date(userDateStart)
-        userDateEnd.setDate(userDateEnd.getDate() + 1)
-        userDateEnd.setMilliseconds(-1) // End of day
+        // Calculate selected date boundaries in user's local timezone
+        const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0)
+        const userDateEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999)
         
-        // Fetch selected date's overview with timezone-aware date range
-        const todayResponse = await fetch(`/api/dashboard/today-overview?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
-        const todayResult = await todayResponse.json()
+        // Fetch all data from unified API
+        const response = await fetch(`/api/dashboard/presence-data?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
+        const result = await response.json()
         
-        if (todayResult.success) {
-          // Transform UserTodayData to UserStats format
-          const transformedData: UserStats[] = todayResult.data.map((user: UserTodayData) => ({
+        if (result.success) {
+          const presenceData: UserPresenceData[] = result.data
+          
+          // Transform to UserStats format for existing components
+          const transformedData: UserStats[] = presenceData.map((user: UserPresenceData) => ({
             id: user.id,
-            name: user.name,
+            name: user.name || 'Unknown',
             avatarUrl: user.avatarUrl,
             timezone: user.timezone,
             totalActiveMinutes: user.totalActiveMinutes,
             todayActiveMinutes: user.totalActiveMinutes,
-            lastSeen: null, // Not available in current API
-            isOnline: user.isCurrentlyOnline // Use recent activity (last 15 minutes)
+            lastSeen: null,
+            isOnline: user.isCurrentlyOnline
           }))
           
+          // Transform to UserTodayData format for existing components
+          const todayData: UserTodayData[] = presenceData.map((user: UserPresenceData) => ({
+            id: user.id,
+            name: user.name,
+            avatarUrl: user.avatarUrl,
+            timezone: user.timezone,
+            slackUserId: user.slackUserId,
+            timeline: user.timeline,
+            totalActiveMinutes: user.totalActiveMinutes,
+            messageCount: user.messageCount,
+            isCurrentlyOnline: user.isCurrentlyOnline,
+            lastActiveTime: user.lastActiveTime
+          }))
+          
+          // Convert workdays to timeline map format
+          const timelineMap = new Map<string, WorkdayData[]>()
+          presenceData.forEach(user => {
+            timelineMap.set(user.id, user.workdays)
+          })
+          
           setData(transformedData)
-          setTodayData(todayResult.data)
+          setTodayData(todayData)
+          setTimelineData(timelineMap)
           
-          // Extract user IDs and fetch timeline data in batch only if needed
-          const userIds = todayResult.data.map((user: UserTodayData) => user.id)
-          const newUserIds = userIds.sort().join(',')
-          
-          // Only fetch timeline data if users changed or we don't have timeline data yet
-          if (userIds.length > 0 && (!timelineData || previousUserIdsRef.current !== newUserIds)) {
-            const timelineResponse = await fetch(`/api/dashboard/user-timelines?userIds=${userIds.join(',')}&start=${userDateStart.toISOString()}`)
-            const timelineResult = await timelineResponse.json()
-            
-            if (timelineResult.success) {
-              // Convert array to map for easier lookup
-              const timelineMap = new Map()
-              timelineResult.data.forEach((userTimeline: { userId: string; workdays: unknown }) => {
-                timelineMap.set(userTimeline.userId, userTimeline.workdays)
-              })
-              setTimelineData(timelineMap)
-              previousUserIdsRef.current = newUserIds
-            }
-          }
         } else {
           // Check if this is a rate limiting issue
-          if (todayResult.error === 'ratelimited' || todayResult.error?.includes('rate limit')) {
+          if (result.error === 'ratelimited' || result.error?.includes('rate limit')) {
             setRateLimited(true)
             setError('Slack API rate limited - using cached data')
           } else {
-            setError(todayResult.error || 'Failed to fetch data')
+            setError(result.error || 'Failed to fetch data')
           }
         }
       } catch (err) {
@@ -192,15 +193,13 @@ export default function AuthenticatedDashboard() {
       } finally {
         setLoading(false)
         isRefreshingRef.current = false
-        setIsRefreshing(false) // Always clear refreshing state
       }
     })()
     
     // Store the active request and return it
     activeRequestRef.current = requestPromise
     return requestPromise
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]) // timelineData intentionally excluded to prevent circular dependency
+  }, [status])
 
   useEffect(() => {
     if (status !== 'authenticated') return
@@ -386,8 +385,10 @@ export default function AuthenticatedDashboard() {
     }
   }
 
-  const formatLastSeen = (lastActiveTime: string | null) => {
-    if (!lastActiveTime) return 'Never seen active'
+  const formatLastSeen = (lastActiveTime: string | null, totalActiveMinutes: number) => {
+    if (!lastActiveTime) {
+      return totalActiveMinutes === 0 ? 'No activity data available' : 'Never seen active'
+    }
     
     const lastActive = new Date(lastActiveTime)
     const now = new Date()
@@ -403,7 +404,12 @@ export default function AuthenticatedDashboard() {
       if (diffHours < 24) {
         return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
       } else {
-        return `Last seen ${lastActive.toLocaleDateString()} at ${lastActive.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        const diffDays = Math.floor(diffHours / 24)
+        if (diffDays < 7) {
+          return `Last seen ${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+        } else {
+          return `Last seen ${lastActive.toLocaleDateString()} at ${lastActive.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        }
       }
     }
   }
@@ -659,7 +665,8 @@ export default function AuthenticatedDashboard() {
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {user.isOnline ? 'Currently online' : 'Offline'}
+                            {user.isOnline ? 'Currently online' : 
+                             user.totalActiveMinutes === 0 ? 'No recent activity' : 'Offline'}
                           </p>
                         </div>
                       </div>
@@ -695,7 +702,7 @@ export default function AuthenticatedDashboard() {
             transform: 'translateX(-50%)'
           }}
         >
-          {formatLastSeen(hoveredUser.user.lastActiveTime)}
+          {formatLastSeen(hoveredUser.user.lastActiveTime, hoveredUser.user.totalActiveMinutes)}
         </div>,
         document.body
       )}

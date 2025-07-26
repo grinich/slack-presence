@@ -20,7 +20,7 @@ interface TimelineData {
 
 interface UserTodayData {
   id: string
-  name: string
+  name: string | null
   avatarUrl: string | null
   timezone: string | null
   slackUserId: string
