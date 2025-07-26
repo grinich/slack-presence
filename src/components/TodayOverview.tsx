@@ -2,6 +2,7 @@
 
 import { useState, useMemo, memo, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 interface TimelineData {
@@ -91,7 +92,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
   }, [])
 
   // Memoize expensive functions
-  const getStatusColor = useCallback((status: string, _onlinePercentage: number) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'online':
         return 'bg-success'
@@ -103,7 +104,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     }
   }, [])
 
-  const getStatusOpacity = useCallback((_status: string) => {
+  const getStatusOpacity = useCallback(() => {
     // Always full opacity - no fading based on percentage
     return 'opacity-100'
   }, [])
@@ -121,26 +122,6 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
   }
 
-  const formatAsSlackHandle = (slackUserId: string, name: string | null) => {
-    if (!slackUserId) return name || 'Unknown'
-    
-    // For now, we'll create a simplified handle from the name
-    // In the future, we can add an actual slackHandle field to the database
-    if (name) {
-      // Convert "John Doe" to "john.doe" as a reasonable Slack handle approximation
-      const handle = name.toLowerCase()
-        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
-        .trim()
-        .split(/\s+/) // Split on whitespace
-        .join('.') // Join with dots
-        .substring(0, 20) // Limit length
-      
-      return `@${handle}`
-    }
-    
-    // Fallback to a simplified version of the Slack ID
-    return `@${slackUserId.substring(1, 8).toLowerCase()}`
-  }
 
   const formatNameAsFirstNameLastInitial = (name: string | null) => {
     if (!name) return 'Unknown'
@@ -265,8 +246,13 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             return (
               <div key={user.id} className="flex items-center gap-3 hover:bg-accent/30 transition-all duration-200 rounded-lg px-2 py-1 group">
                 {/* User name */}
-                <div className="w-24 flex-shrink-0 text-sm font-medium text-card-foreground group-hover:text-foreground text-right transition-colors">
-                  {formatNameAsFirstNameLastInitial(user.name)}
+                <div className="w-24 flex-shrink-0 text-right">
+                  <Link 
+                    href={`/user/${user.id}`}
+                    className="text-sm font-medium text-card-foreground group-hover:text-foreground hover:text-primary transition-colors cursor-pointer"
+                  >
+                    {formatNameAsFirstNameLastInitial(user.name)}
+                  </Link>
                 </div>
                 
                 {/* Timezone offset */}
@@ -284,8 +270,8 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
                           key={slot.blockIndex}
                           className={cn(
                             "h-5 cursor-pointer transition-all hover:scale-105 hover:ring-1 hover:ring-ring/50 flex-1 min-w-0 rounded-sm",
-                            getStatusColor(slot.status, slot.onlinePercentage),
-                            getStatusOpacity(slot.status)
+                            getStatusColor(slot.status),
+                            getStatusOpacity()
                           )}
                           onMouseEnter={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect()

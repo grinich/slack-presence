@@ -3,11 +3,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createPortal } from 'react-dom'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Users, Clock, Activity, TrendingUp, LogOut, Calendar } from 'lucide-react'
-import UserTimeline from '@/components/UserTimeline'
 import TodayOverview from '@/components/TodayOverview'
 
 interface UserStats {
@@ -36,27 +36,7 @@ interface PresenceBlock {
   blockEnd: string // UTC ISO string
 }
 
-interface WorkdayData {
-  date: string
-  dayName: string
-  dayShort: string
-  timeline: PresenceBlock[]
-  messageCount: number
-}
 
-interface UserPresenceData {
-  id: string
-  name: string | null
-  avatarUrl: string | null
-  timezone: string | null
-  slackUserId: string
-  timeline: PresenceBlock[]
-  totalActiveMinutes: number
-  messageCount: number
-  isCurrentlyOnline: boolean
-  lastActiveTime: string | null
-  workdays: WorkdayData[]
-}
 
 interface UserTodayData {
   id: string
@@ -76,7 +56,6 @@ export default function AuthenticatedDashboard() {
   const { status } = useSession()
   const router = useRouter()
   const [data, setData] = useState<UserStats[] | null>(null)
-  const [timelineData, setTimelineData] = useState<Map<string, WorkdayData[]> | null>(null)
   const [todayData, setTodayData] = useState<UserTodayData[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -126,19 +105,36 @@ export default function AuthenticatedDashboard() {
         isRefreshingRef.current = true
         lastRefreshRef.current = now
         
-        // Calculate selected date boundaries in user's local timezone
-        const userDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0)
-        const userDateEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999)
+        // Calculate selected date boundaries in local timezone
+        const year = targetDate.getFullYear()
+        const month = targetDate.getMonth()
+        const date = targetDate.getDate()
+        
+        // Create date boundaries in local timezone 
+        const userDateStart = new Date(year, month, date, 0, 0, 0, 0)
+        const userDateEnd = new Date(year, month, date, 23, 59, 59, 999)
+        
+        // Always ensure we include current time for real-time data
+        const currentTime = new Date()
+        const isToday = targetDate.toDateString() === currentTime.toDateString()
+        
+        if (isToday) {
+          // Extend the end time to include current time plus buffer
+          const extendedEnd = new Date(currentTime.getTime() + 60 * 60 * 1000) // 1 hour buffer
+          if (extendedEnd > userDateEnd) {
+            userDateEnd.setTime(extendedEnd.getTime())
+          }
+        }
         
         // Fetch all data from unified API
         const response = await fetch(`/api/dashboard/presence-data?start=${userDateStart.toISOString()}&end=${userDateEnd.toISOString()}`)
         const result = await response.json()
         
         if (result.success) {
-          const presenceData: UserPresenceData[] = result.data
+          const presenceData = result.data
           
           // Transform to UserStats format for existing components
-          const transformedData: UserStats[] = presenceData.map((user: UserPresenceData) => ({
+          const transformedData: UserStats[] = presenceData.map((user: UserTodayData) => ({
             id: user.id,
             name: user.name || 'Unknown',
             avatarUrl: user.avatarUrl,
@@ -150,7 +146,7 @@ export default function AuthenticatedDashboard() {
           }))
           
           // Transform to UserTodayData format for existing components
-          const todayData: UserTodayData[] = presenceData.map((user: UserPresenceData) => ({
+          const todayData: UserTodayData[] = presenceData.map((user: UserTodayData) => ({
             id: user.id,
             name: user.name,
             avatarUrl: user.avatarUrl,
@@ -163,15 +159,8 @@ export default function AuthenticatedDashboard() {
             lastActiveTime: user.lastActiveTime
           }))
           
-          // Convert workdays to timeline map format
-          const timelineMap = new Map<string, WorkdayData[]>()
-          presenceData.forEach(user => {
-            timelineMap.set(user.id, user.workdays)
-          })
-          
           setData(transformedData)
           setTodayData(todayData)
-          setTimelineData(timelineMap)
           
         } else {
           // Check if this is a rate limiting issue
@@ -354,36 +343,6 @@ export default function AuthenticatedDashboard() {
     return lastInitial ? `${firstName} ${lastInitial}.` : firstName
   }
 
-  const formatUserLocalTime = (timezone: string | null) => {
-    if (!timezone) return null
-    
-    try {
-      const now = new Date()
-      const userTime = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }).format(now)
-      
-      // Get timezone abbreviation if different from browser timezone
-      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-      if (timezone === browserTimezone) {
-        return userTime
-      }
-      
-      // Try to get timezone abbreviation
-      const zoneName = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        timeZoneName: 'short'
-      }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value || ''
-      
-      return `${userTime} ${zoneName}`
-    } catch {
-      // If timezone is invalid, return null
-      return null
-    }
-  }
 
   const formatLastSeen = (lastActiveTime: string | null, totalActiveMinutes: number) => {
     if (!lastActiveTime) {
@@ -484,8 +443,9 @@ export default function AuthenticatedDashboard() {
               
               <div className="flex flex-wrap gap-3 min-h-[3rem] items-start">
                 {memoizedCurrentlyOnlineUsers.map((user) => (
-                  <div 
-                    key={user.id} 
+                  <Link
+                    key={user.id}
+                    href={`/user/${user.id}`}
                     className="group flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 cursor-pointer hover:bg-accent/50 transition-all duration-200 hover:scale-105 animate-fade-in"
                     onMouseEnter={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect()
@@ -512,7 +472,7 @@ export default function AuthenticatedDashboard() {
                     <span className="text-sm font-medium text-card-foreground group-hover:text-foreground transition-colors">
                       {formatNameAsFirstNameLastInitial(user.name)}
                     </span>
-                  </div>
+                  </Link>
                 ))}
                 {memoizedCurrentlyOnlineUsers.length === 0 && (
                   <div className="flex items-center gap-2 text-muted-foreground bg-muted/30 rounded-lg px-4 py-3">
@@ -623,72 +583,6 @@ export default function AuthenticatedDashboard() {
               </div>
             </div>
 
-            {/* Team Member Details */}
-            <div className="bg-card border border-border rounded-2xl overflow-hidden">
-              <div className="p-6 border-b border-border">
-                <h3 className="text-lg font-medium text-foreground">Team Members</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Individual activity and 7-day history
-                </p>
-              </div>
-              
-              <div className="divide-y divide-border">
-                {data.map((user) => (
-                  <div key={user.id} className="p-6 hover:bg-accent/30 transition-colors">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-4">
-                        <div className="relative">
-                          {user.avatarUrl ? (
-                            <img
-                              src={user.avatarUrl}
-                              alt={user.name || 'User'}
-                              className="w-12 h-12 rounded-full ring-2 ring-border"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center ring-2 ring-border">
-                              <span className="text-lg font-medium text-muted-foreground">
-                                {user.name?.[0]?.toUpperCase() || 'U'}
-                              </span>
-                            </div>
-                          )}
-                          <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-card ${
-                            user.isOnline ? 'bg-success' : 'bg-muted-foreground'
-                          }`} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-3 mb-1">
-                            <h4 className="font-medium text-foreground">{user.name || 'Unknown User'}</h4>
-                            {formatUserLocalTime(user.timezone) && (
-                              <span className="text-xs font-mono bg-accent text-accent-foreground px-2 py-1 rounded">
-                                {formatUserLocalTime(user.timezone)}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {user.isOnline ? 'Currently online' : 
-                             user.totalActiveMinutes === 0 ? 'No recent activity' : 'Offline'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-semibold text-foreground">{formatMinutes(user.totalActiveMinutes)}</div>
-                        <p className="text-sm text-muted-foreground">
-                          {selectedDate.toDateString() === new Date().toDateString() 
-                            ? `Today: ${formatMinutes(user.todayActiveMinutes)}`
-                            : `${selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${formatMinutes(user.todayActiveMinutes)}`
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <UserTimeline 
-                      userId={user.id}
-                      workdays={timelineData?.get(user.id)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
         </div>
       </div>
 

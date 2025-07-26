@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { format } from 'date-fns'
 
 interface PresenceBlock {
   hour: number
@@ -16,13 +15,6 @@ interface PresenceBlock {
   blockEnd: string
 }
 
-interface WorkdayData {
-  date: string
-  dayName: string
-  dayShort: string
-  timeline: PresenceBlock[]
-  messageCount: number
-}
 
 interface UserPresenceData {
   id: string
@@ -35,7 +27,6 @@ interface UserPresenceData {
   messageCount: number
   isCurrentlyOnline: boolean
   lastActiveTime: string | null
-  workdays: WorkdayData[]
 }
 
 export async function GET(request: NextRequest) {
@@ -46,18 +37,28 @@ export async function GET(request: NextRequest) {
   try {
     const startTime = Date.now()
     
-    // Calculate date boundaries - use provided dates or default to UTC today
+    // Calculate date boundaries - use provided dates or default to current date range
     let todayStart: Date
     let todayEnd: Date
     
     if (startParam && endParam) {
       todayStart = new Date(startParam)
       todayEnd = new Date(endParam)
-    } else {
+      
+      // Ensure we include current time if the range includes today
       const now = new Date()
-      todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)  
-      todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+      if (now > todayEnd) {
+        // Extend the end time to include current time
+        todayEnd = new Date(now.getTime() + 60 * 60 * 1000) // Add 1 hour buffer
+      }
+    } else {
+      // Default to a 24-hour window that includes current time
+      const now = new Date()
+      todayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago
+      todayEnd = new Date(now.getTime() + 60 * 60 * 1000) // 1 hour from now
     }
+    
+    console.log(`📊 Date range: ${todayStart.toISOString()} to ${todayEnd.toISOString()}`)
 
     // Get all active users
     const users = await prisma.user.findMany({
@@ -108,62 +109,13 @@ export async function GET(request: NextRequest) {
     })
     console.log(`📊 Today's data query took ${Date.now() - queryStart}ms (${todayPresenceLogs.length} records)`)
 
-    // Calculate 7-day range for timeline data (selected date + 6 previous days)
-    const workdays: Date[] = []
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(todayStart.getTime() - i * 24 * 60 * 60 * 1000)
-      workdays.push(date)
-    }
+    console.log(`📊 Total records: ${todayPresenceLogs.length}`)
 
-    const oldestWorkday = workdays[workdays.length - 1]
-    const timelineRangeStart = new Date(oldestWorkday.getTime())
-
-    // Get additional timeline data (excluding today since we already have it)
-    const timelineQueryStart = Date.now()
-    const timelinePresenceLogs = await prisma.presenceLog.findMany({
-      where: {
-        userId: { in: userIds },
-        timestamp: {
-          gte: timelineRangeStart,
-          lt: todayStart, // Exclude today's data to avoid duplicates
-        },
-      },
-      select: {
-        userId: true,
-        status: true,
-        timestamp: true,
-      },
-      orderBy: [
-        { userId: 'asc' },
-        { timestamp: 'asc' }
-      ],
-      take: 40000, // Limit historical data
-    })
-    console.log(`📊 Timeline data query took ${Date.now() - timelineQueryStart}ms (${timelinePresenceLogs.length} records)`)
-
-    // Combine both datasets
-    const allPresenceLogs = [...todayPresenceLogs, ...timelinePresenceLogs]
-    console.log(`📊 Total records: ${allPresenceLogs.length}`)
-
-    // Group presence logs by user and date for efficient processing
-    const presenceByUserAndDay = new Map<string, Array<{ timestamp: Date, status: string }>>()
+    // Group presence logs by user for efficient processing
     const presenceByUser = new Map<string, Array<{ timestamp: Date, status: string }>>()
 
     const processingStart = Date.now()
-    allPresenceLogs.forEach(log => {
-      // For timeline data (grouped by user and day)
-      const dateKey = log.timestamp.toISOString().split('T')[0]
-      const userDayKey = `${log.userId}-${dateKey}`
-      
-      if (!presenceByUserAndDay.has(userDayKey)) {
-        presenceByUserAndDay.set(userDayKey, [])
-      }
-      presenceByUserAndDay.get(userDayKey)!.push({
-        timestamp: log.timestamp,
-        status: log.status
-      })
-
-      // For today's data (grouped by user only)
+    todayPresenceLogs.forEach(log => {
       if (!presenceByUser.has(log.userId)) {
         presenceByUser.set(log.userId, [])
       }
@@ -195,12 +147,16 @@ export async function GET(request: NextRequest) {
         ? allActiveLogs[allActiveLogs.length - 1].timestamp 
         : null
 
-      // Generate today's timeline (96 15-minute blocks)
+      // Generate today's timeline (96 15-minute blocks) 
+      // Create blocks aligned to clean 15-minute boundaries for the selected day
+      const selectedDay = new Date(todayStart)
+      selectedDay.setHours(0, 0, 0, 0) // Start at midnight of the selected day
+      
       const todayTimeline: PresenceBlock[] = []
       
       for (let hour = 0; hour < 24; hour++) {
         for (let quarter = 0; quarter < 4; quarter++) {
-          const blockStart = new Date(todayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
+          const blockStart = new Date(selectedDay.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
           const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
           
           const blockLogs = todayLogs.filter(log => 
@@ -235,60 +191,6 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Generate 7-day timeline data
-      const userWorkdays: WorkdayData[] = workdays.map(workday => {
-        const dateKey = workday.toISOString().split('T')[0]
-        const userDayKey = `${user.id}-${dateKey}`
-        const dayPresenceLogs = presenceByUserAndDay.get(userDayKey) || []
-        
-        const dayStart = new Date(workday.getTime())
-        const dayTimeline: PresenceBlock[] = []
-        
-        for (let hour = 0; hour < 24; hour++) {
-          for (let quarter = 0; quarter < 4; quarter++) {
-            const blockStart = new Date(dayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
-            const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
-            
-            const blockLogs = dayPresenceLogs.filter(log => 
-              log.timestamp >= blockStart && log.timestamp < blockEnd
-            )
-            
-            const activeMinutes = blockLogs.filter(log => log.status === 'active').length
-            const onlinePercentage = Math.round((activeMinutes / 15) * 100)
-            
-            let status: 'online' | 'offline' | 'no-data'
-            if (blockLogs.length === 0) {
-              status = 'no-data'
-            } else if (activeMinutes > 0) {
-              status = 'online'
-            } else {
-              status = 'offline'
-            }
-            
-            dayTimeline.push({
-              hour,
-              quarter,
-              blockIndex: hour * 4 + quarter,
-              status,
-              onlinePercentage,
-              activeMinutes,
-              totalMinutes: 15,
-              messageCount: 0,
-              hasMessages: false,
-              blockStart: blockStart.toISOString(),
-              blockEnd: blockEnd.toISOString(),
-            })
-          }
-        }
-        
-        return {
-          date: dateKey,
-          dayName: format(workday, 'EEEE'),
-          dayShort: format(workday, 'EEE'),
-          timeline: dayTimeline,
-          messageCount: 0,
-        }
-      })
 
       // Calculate total active minutes for today
       const totalActiveMinutes = todayTimeline.reduce((sum, block) => sum + block.activeMinutes, 0)
@@ -304,7 +206,6 @@ export async function GET(request: NextRequest) {
         messageCount: 0,
         isCurrentlyOnline,
         lastActiveTime: lastActiveTime?.toISOString() || null,
-        workdays: userWorkdays,
       }
     })
 
