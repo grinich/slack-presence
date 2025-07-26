@@ -3,12 +3,24 @@
 import { memo } from 'react'
 import { cn } from '@/lib/utils'
 
+interface TimelineBlock {
+  hour: number
+  quarter: number
+  blockIndex: number
+  status: 'online' | 'offline' | 'no-data'
+  onlinePercentage: number
+  activeMinutes: number
+  totalMinutes: number
+  blockStart: string
+  blockEnd: string
+}
+
 interface DayData {
   date: string
   dayName: string
   dayShort: string
   totalActiveMinutes: number
-  timeline: any[]
+  timeline: TimelineBlock[]
 }
 
 interface WeeklyOverviewProps {

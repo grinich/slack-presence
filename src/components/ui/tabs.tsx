@@ -36,7 +36,7 @@ const TabsTrigger = React.forwardRef<
     value: string
     isActive?: boolean
   }
->(({ className, value, isActive, ...props }, ref) => (
+>(({ className, isActive, ...props }, ref) => (
   <button
     ref={ref}
     className={cn(
@@ -57,7 +57,7 @@ const TabsContent = React.forwardRef<
     value: string
     isActive?: boolean
   }
->(({ className, value, isActive, ...props }, ref) => (
+>(({ className, isActive, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
