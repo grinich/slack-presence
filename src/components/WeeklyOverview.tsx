@@ -55,8 +55,8 @@ function WeeklyOverview({ days, className }: WeeklyOverviewProps) {
   }
 
   // Group days into weeks
-  const weeks = []
-  let currentWeek = []
+  const weeks: DayData[][] = []
+  let currentWeek: DayData[] = []
   
   days.forEach((day, index) => {
     currentWeek.push(day)
