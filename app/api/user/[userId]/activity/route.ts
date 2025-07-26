@@ -88,12 +88,10 @@ export async function GET(
       startDate.setDate(endDate.getDate() - 14)
     }
 
-    // Ensure we start from the beginning of the start date and end at the end of the end date
-    const adjustedStartDate = new Date(startDate)
-    adjustedStartDate.setHours(0, 0, 0, 0)
-    
-    const adjustedEndDate = new Date(endDate)
-    adjustedEndDate.setHours(23, 59, 59, 999)
+    // Use the start and end dates as provided by the client
+    // The client already calculated the correct boundaries in their local timezone
+    const adjustedStartDate = startDate
+    const adjustedEndDate = endDate
 
     console.log(`📊 Fetching user activity for ${userId} from ${adjustedStartDate.toISOString()} to ${adjustedEndDate.toISOString()}`)
 
@@ -145,13 +143,15 @@ export async function GET(
       const timeline: PresenceBlock[] = []
       let dayActiveMinutes = 0
       
+      // Get the start of the current day, preserving the client's timezone intent
+      const dayStart = new Date(currentDate)
+      dayStart.setHours(0, 0, 0, 0)
+      
       for (let hour = 0; hour < 24; hour++) {
         for (let quarter = 0; quarter < 4; quarter++) {
-          const blockStart = new Date(currentDate)
-          blockStart.setHours(hour, quarter * 15, 0, 0)
-          
-          const blockEnd = new Date(blockStart)
-          blockEnd.setTime(blockStart.getTime() + 15 * 60 * 1000) // Add 15 minutes
+          // Calculate block times relative to the day start
+          const blockStart = new Date(dayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
+          const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
           
           // Find logs within this 15-minute block
           const blockLogs = dayLogs.filter(log => 

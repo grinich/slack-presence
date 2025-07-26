@@ -149,14 +149,14 @@ export async function GET(request: NextRequest) {
 
       // Generate today's timeline (96 15-minute blocks) 
       // Create blocks aligned to clean 15-minute boundaries for the selected day
-      const selectedDay = new Date(todayStart)
-      selectedDay.setHours(0, 0, 0, 0) // Start at midnight of the selected day
+      // The todayStart already represents the correct local time boundaries from the client
       
       const todayTimeline: PresenceBlock[] = []
       
       for (let hour = 0; hour < 24; hour++) {
         for (let quarter = 0; quarter < 4; quarter++) {
-          const blockStart = new Date(selectedDay.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
+          // Calculate block boundaries directly from todayStart which preserves the client's timezone intent
+          const blockStart = new Date(todayStart.getTime() + (hour * 60 + quarter * 15) * 60 * 1000)
           const blockEnd = new Date(blockStart.getTime() + 15 * 60 * 1000)
           
           const blockLogs = todayLogs.filter(log => 
