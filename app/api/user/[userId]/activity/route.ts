@@ -186,9 +186,12 @@ export async function GET(
         }
       }
       
-      // Get day name
-      const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' })
-      const dayShort = currentDate.toLocaleDateString('en-US', { weekday: 'short' })
+      // Get day name from the dateKey (YYYY-MM-DD) to ensure it matches the client's expectation
+      // Parse the date parts and create a date that represents the same calendar day
+      const [year, month, day] = dateKey.split('-').map(Number)
+      const dateForDayName = new Date(year, month - 1, day) // month is 0-indexed
+      const dayName = dateForDayName.toLocaleDateString('en-US', { weekday: 'long' })
+      const dayShort = dateForDayName.toLocaleDateString('en-US', { weekday: 'short' })
       
       days.push({
         date: dateKey,
