@@ -56,9 +56,14 @@ export default function UserDetailPage() {
   const fetchUserActivity = useCallback(async (weeks: number) => {
     try {
       setLoading(true)
+      // Create end date at end of today to include full current day
       const endDate = new Date()
+      endDate.setHours(23, 59, 59, 999)
+      
+      // Create start date at beginning of the start day
       const startDate = new Date()
       startDate.setDate(endDate.getDate() - (weeks * 7))
+      startDate.setHours(0, 0, 0, 0)
       
       const timezoneOffset = startDate.getTimezoneOffset()
       const response = await fetch(
