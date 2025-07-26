@@ -180,7 +180,7 @@ function DailyTimeline({ days, className }: DailyTimelineProps) {
             const endQuarter = Math.floor(endMinutes / 15)
             const endTime = formatTime(endHour, endQuarter)
             
-            return `${formatDate(hoveredSlot.day.date)} ${startTime} - ${endTime} • ${hoveredSlot.slot.activeMinutes}min active`
+            return `${formatDate(hoveredSlot.day.date)} ${startTime} - ${endTime} (${hoveredSlot.slot.activeMinutes} checks)`
           })()}
         </div>,
         document.body

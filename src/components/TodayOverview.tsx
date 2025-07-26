@@ -333,7 +333,7 @@ function TodayOverview({ users, className }: TodayOverviewProps) {
             const endQuarter = Math.floor(endMinutes / 15)
             const endTime = formatTime(endHour, endQuarter)
             
-            return `${formatNameAsFirstNameLastInitial(hoveredSlot.user.name)} ${startTime} - ${endTime}${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
+            return `${formatNameAsFirstNameLastInitial(hoveredSlot.user.name)} ${startTime} - ${endTime} (${hoveredSlot.slot.activeMinutes} checks)${hoveredSlot.slot.hasMessages ? ` • ${hoveredSlot.slot.messageCount} messages` : ''}`
           })()}
         </div>,
         document.body
