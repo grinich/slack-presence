@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
           let status: 'online' | 'offline' | 'no-data'
           if (blockLogs.length === 0) {
             status = 'no-data'
-          } else if (activeMinutes > 0) {
+          } else if (activeMinutes >= 3) { // Require 3+ active minutes in 15-minute block
             status = 'online'
           } else {
             status = 'offline'
